@@ -16,13 +16,11 @@ export default function Document() {
         <script src="https://cdn.jsdelivr.net/npm/@tailwindplus/elements@1" type="module"></script>
       </Head>
       <body>
-        <div class="relative min-h-screen">
-          <Header />
-          <div id="main-content">
-            <Main />
-          </div>
-          <Footer />
+        <Header />
+        <div id="main-content">
+          <Main />
         </div>
+        <Footer />
         <NextScript />
       </body>
     </Html>

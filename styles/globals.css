@@ -3,3 +3,7 @@
 html {
     background: black;
 }
+
+#main-content {
+    min-height: 85.8vh;
+}
