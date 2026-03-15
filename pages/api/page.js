@@ -58,9 +58,26 @@ export default async function handler(req, res) {
             if(t && !t.startsWith('_')) tags.push(t);
         });
 
-        let creator = $('.printuser').last().text().trim() || $('#page-info a[href*="/user:info/"]').first().text().trim() || '未知';
-        
-        // 核心修复：使用 .last() 强制只获取最后一个时间节点，防止多个日期拼接
+        // 获取创建者名字和头像
+        let creatorName = '未知';
+        let creatorAvatar = null;
+        const printusers = $('.printuser');
+        if (printusers.length > 0) {
+            const lastUser = printusers.last();
+            creatorName = lastUser.text().trim();
+            creatorAvatar = lastUser.find('img').attr('src');
+        }
+        if (!creatorName || creatorName === '未知') {
+            creatorName = $('#page-info a[href*="/user:info/"]').first().text().trim() || '未知';
+        }
+        // 处理 Wikidot 相对路径头像
+        if (creatorAvatar && !creatorAvatar.startsWith('http')) {
+            creatorAvatar = `https://www.wikidot.com${creatorAvatar.startsWith('/') ? '' : '/'}${creatorAvatar}`;
+        }
+
+        // 获取评价表评分
+        let rating = $('.rate-points').first().text().trim() || 'N/A';
+
         let lastUpdated = $('#page-info .odate').last().text().trim() || $('.odate').last().text().trim() || '未知';
 
         let pageId = null;
@@ -107,9 +124,7 @@ export default async function handler(req, res) {
                     if (data.status === 'ok') {
                         const $src = cheerio.load(data.body);
                         let rawHtml = $src('.page-source').html() || data.body;
-                        
                         rawHtml = rawHtml.replace(/<br\s*\/?>/gi, '\n');
-                        
                         sourceCode = rawHtml.replace(/&lt;/g, '<')
                                             .replace(/&gt;/g, '>')
                                             .replace(/&amp;/g, '&')
@@ -152,7 +167,9 @@ export default async function handler(req, res) {
             title: title,
             content: contentHtml,
             tags: tags,
-            creator: creator,
+            creatorName: creatorName,
+            creatorAvatar: creatorAvatar,
+            rating: rating,
             lastUpdated: lastUpdated,
             sourceCode: sourceCode,
             historyHtml: historyHtml
