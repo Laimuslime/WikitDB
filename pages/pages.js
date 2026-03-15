@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
+import Link from 'next/link';
 const config = require('../wikitdb.config.js');
 
 const Pages = () => {
@@ -93,14 +94,13 @@ const Pages = () => {
                                     {data.links.map((link, index) => (
                                         <li key={index} className="text-gray-400 flex flex-col sm:flex-row sm:items-baseline gap-2">
                                             <span className="text-gray-500 w-6">{(index + 1).toString().padStart(2, '0')}.</span>
-                                            <a 
-                                                href={link.href} 
-                                                target="_blank" 
-                                                rel="noopener noreferrer" 
+                                            {/* 修改为跳转到项目内部的详情页 */}
+                                            <Link 
+                                                href={`/page?site=${selectedSite}&url=${encodeURIComponent(link.href)}`}
                                                 className="hover:text-indigo-400 text-indigo-300 transition-colors break-all"
                                             >
                                                 {link.text}
-                                            </a>
+                                            </Link>
                                         </li>
                                     ))}
                                 </ul>
