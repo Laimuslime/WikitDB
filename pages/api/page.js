@@ -45,7 +45,6 @@ export default async function handler(req, res) {
         const creator = $('#page-info .printuser').last().text().trim() || '未知';
         const lastUpdated = $('#page-info .odate').text().trim() || '未知';
 
-        // --- 开始通过底层 AJAX 提取真实源码和历史记录 ---
         let pageId = null;
         const pageIdMatch = html.match(/WIKIDOT\.page\.listeners\.pageId\s*=\s*(\d+)/) || html.match(/pageId\s*=\s*(\d+)/);
         if (pageIdMatch) {
@@ -54,19 +53,19 @@ export default async function handler(req, res) {
 
         let sourceCode = '无法在页面中提取到 pageId，源码抓取失败';
         let historyHtml = '<div class="text-red-400">无法在页面中提取到 pageId，历史记录抓取失败</div>';
+        let discussionHtml = '<div class="text-gray-500 text-center">暂无讨论数据。</div>';
 
         if (pageId) {
             const origin = new URL(url).origin;
             const ajaxUrl = `${origin}/ajax-module-connector.php`;
             
-            // 伪造 Cookie 绕过原站防跨站保护
             const ajaxHeaders = {
                 ...fetchHeaders,
                 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
                 'Cookie': 'wikidot_token7=123456;'
             };
 
-            // 1. 抓取真实源码 (Wikitext)
+            // 1. 抓取真实源码
             try {
                 const srcRes = await fetch(ajaxUrl, {
                     method: 'POST',
@@ -78,11 +77,9 @@ export default async function handler(req, res) {
                     const $src = cheerio.load(srcData.body);
                     sourceCode = $src.text().trim() || srcData.body;
                 }
-            } catch (e) {
-                sourceCode = `请求源码模块失败: ${e.message}`;
-            }
+            } catch (e) {}
 
-            // 2. 抓取修改历史 (History Module)
+            // 2. 抓取修改历史
             try {
                 const histRes = await fetch(ajaxUrl, {
                     method: 'POST',
@@ -93,8 +90,36 @@ export default async function handler(req, res) {
                 if (histData.status === 'ok') {
                     historyHtml = histData.body;
                 }
-            } catch (e) {
-                historyHtml = `<div class="text-red-400">请求历史记录模块失败: ${e.message}</div>`;
+            } catch (e) {}
+
+            // 3. 解析 Thread ID 并抓取讨论区
+            let threadId = null;
+            const discussHref = $('#discuss-button').attr('href');
+            if (discussHref) {
+                const tMatch = discussHref.match(/\/t-(\d+)\//);
+                if (tMatch) threadId = tMatch[1];
+            }
+            if (!threadId) {
+                const tMatch = html.match(/['"]\/forum\/t-(\d+)\//);
+                if (tMatch) threadId = tMatch[1];
+            }
+
+            if (threadId) {
+                try {
+                    const discRes = await fetch(ajaxUrl, {
+                        method: 'POST',
+                        headers: ajaxHeaders,
+                        body: `t=${threadId}&moduleName=forum/ForumViewThreadCommentsModule&pageNo=1&wikidot_token7=123456`
+                    });
+                    const discData = await discRes.json();
+                    if (discData.status === 'ok') {
+                        discussionHtml = discData.body;
+                    }
+                } catch (e) {
+                    discussionHtml = `<div class="text-red-400">请求讨论模块失败: ${e.message}</div>`;
+                }
+            } else {
+                discussionHtml = '<div class="text-gray-500 text-center">该页面尚未开启讨论，或无法解析 Thread ID。</div>';
             }
         }
 
@@ -108,7 +133,8 @@ export default async function handler(req, res) {
             creator: creator,
             lastUpdated: lastUpdated,
             sourceCode: sourceCode,
-            historyHtml: historyHtml
+            historyHtml: historyHtml,
+            discussionHtml: discussionHtml
         });
     } catch (error) {
         res.status(500).json({ error: '详情页抓取失败', details: error.message });
