@@ -41,11 +41,11 @@ const Pages = () => {
     return (
         <>
             <Head>
-                <title>{`页面抓取 - ${config.SITE_NAME}`}</title>
+                <title>{`全站导航 - ${config.SITE_NAME}`}</title>
             </Head>
 
             <div className="py-8">
-                <h1 className="text-3xl font-bold text-white mb-8">实时页面数据提取</h1>
+                <h1 className="text-3xl font-bold text-white mb-8">站点页面全量索引</h1>
 
                 <div className="mb-8 flex flex-wrap gap-4">
                     {config.SUPPORT_WIKI.map((wiki) => (
@@ -66,7 +66,7 @@ const Pages = () => {
                 <div className="bg-gray-800/50 rounded-xl p-6 border border-white/10 min-h-[300px]">
                     {loading && (
                         <div className="text-gray-400 flex items-center">
-                            正在从服务器抓取数据并解析...
+                            正在读取全站索引数据 (这可能需要几秒钟)...
                         </div>
                     )}
                     
@@ -83,29 +83,33 @@ const Pages = () => {
                                     来源站点: {data.siteName}
                                 </h2>
                                 <p className="text-gray-400">
-                                    解析到的网页标签标题: {data.pageTitle}
+                                    索引模式: {data.pageTitle}
                                 </p>
                             </div>
 
-                            <h3 className="text-lg text-gray-300 mb-4">提取到的正文链接 (Top 10):</h3>
+                            <h3 className="text-lg text-gray-300 mb-4">
+                                提取到的页面总数: {data.links ? data.links.length : 0}
+                            </h3>
                             
                             {data.links && data.links.length > 0 ? (
-                                <ul className="space-y-3">
-                                    {data.links.map((link, index) => (
-                                        <li key={index} className="text-gray-400 flex flex-col sm:flex-row sm:items-baseline gap-2">
-                                            <span className="text-gray-500 w-6">{(index + 1).toString().padStart(2, '0')}.</span>
-                                            {/* 修改为跳转到项目内部的详情页 */}
-                                            <Link 
-                                                href={`/page?site=${selectedSite}&url=${encodeURIComponent(link.href)}`}
-                                                className="hover:text-indigo-400 text-indigo-300 transition-colors break-all"
-                                            >
-                                                {link.text}
-                                            </Link>
-                                        </li>
-                                    ))}
-                                </ul>
+                                <div className="max-h-[600px] overflow-y-auto pr-4 border border-gray-700/50 rounded-lg p-4 bg-gray-900/30">
+                                    <ul className="space-y-2 grid grid-cols-1 md:grid-cols-2 gap-x-4">
+                                        {data.links.map((link, index) => (
+                                            <li key={index} className="text-gray-400 flex items-baseline gap-2 truncate">
+                                                <span className="text-gray-600 text-xs w-8 shrink-0">{index + 1}.</span>
+                                                <Link 
+                                                    href={`/page?site=${selectedSite}&url=${encodeURIComponent(link.href)}`}
+                                                    className="hover:text-indigo-400 text-indigo-300 transition-colors truncate"
+                                                    title={link.text}
+                                                >
+                                                    {link.text}
+                                                </Link>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
                             ) : (
-                                <p className="text-gray-500">该页面正文区域未解析到超链接。</p>
+                                <p className="text-gray-500">未能解析到任何页面。</p>
                             )}
                         </div>
                     )}
