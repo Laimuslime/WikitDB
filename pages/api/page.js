@@ -22,7 +22,11 @@ export default async function handler(req, res) {
             'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8'
         };
 
-        const response = await fetch(cleanUrl, { headers: fetchHeaders });
+        // 强制关闭 Next.js fetch 缓存
+        const response = await fetch(cleanUrl, { 
+            headers: fetchHeaders,
+            cache: 'no-store'
+        });
         
         if (response.status === 404) {
             throw new Error(`404: 原站点中该页面不存在 (可能是死链或已被原作者删除)`);
@@ -70,9 +74,13 @@ export default async function handler(req, res) {
             const origin = new URL(cleanUrl).origin;
             const ajaxUrl = `${origin}/ajax-module-connector.php`;
             
+            // 核心修复：补充 X-Requested-With 和 Origin，完全模拟浏览器原生 AJAX
             const ajaxHeaders = {
-                ...fetchHeaders,
+                'User-Agent': fetchHeaders['User-Agent'],
+                'Accept': 'application/json, text/javascript, */*; q=0.01',
                 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                'X-Requested-With': 'XMLHttpRequest',
+                'Origin': origin,
                 'Referer': cleanUrl,
                 'Cookie': 'wikidot_token7=123456;'
             };
@@ -81,12 +89,14 @@ export default async function handler(req, res) {
                 fetch(ajaxUrl, {
                     method: 'POST',
                     headers: ajaxHeaders,
-                    body: `page_id=${pageId}&moduleName=viewsource/ViewSourceModule&wikidot_token7=123456`
+                    body: `page_id=${pageId}&moduleName=viewsource/ViewSourceModule&wikidot_token7=123456`,
+                    cache: 'no-store'
                 }),
                 fetch(ajaxUrl, {
                     method: 'POST',
                     headers: ajaxHeaders,
-                    body: `page_id=${pageId}&moduleName=history/PageRevisionListModule&page=1&perpage=50&wikidot_token7=123456`
+                    body: `page_id=${pageId}&moduleName=history/PageRevisionListModule&page=1&perpage=50&wikidot_token7=123456`,
+                    cache: 'no-store'
                 })
             ]);
 
@@ -112,6 +122,11 @@ export default async function handler(req, res) {
                 } catch(e) {}
             }
         }
+
+        // 核心修复：强制清除 Vercel 云端缓存，保证每次都是最新抓取
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
 
         res.status(200).json({
             siteName: wikiConfig.NAME,
