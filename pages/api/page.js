@@ -14,15 +14,15 @@ export default async function handler(req, res) {
     }
 
     try {
+        // 核心修复 1：主请求头绝对不能带伪造的 Cookie，否则 Wikidot 会全站报 404
         const fetchHeaders = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            'Cookie': 'wikidot_token7=123456;'
+            'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8'
         };
 
         const response = await fetch(url, { headers: fetchHeaders });
         
-        // 专门拦截 404 死链，防止整个详情页崩溃白屏
         if (response.status === 404) {
             throw new Error(`404: 原站点中该页面不存在 (可能是死链或已被原作者删除)`);
         }
@@ -70,11 +70,12 @@ export default async function handler(req, res) {
             const origin = new URL(url).origin;
             const ajaxUrl = `${origin}/ajax-module-connector.php`;
             
-            // 核心修复点：增加了 Referer，模拟真实的同源请求，解决 not_ok 报错
+            // 核心修复 2：AJAX 专用请求头，必须带伪造的 Cookie 和 Referer 才能拿到源码历史
             const ajaxHeaders = {
                 ...fetchHeaders,
                 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-                'Referer': url 
+                'Referer': url,
+                'Cookie': 'wikidot_token7=123456;'
             };
 
             const [srcRes, histRes, discRes] = await Promise.allSettled([
