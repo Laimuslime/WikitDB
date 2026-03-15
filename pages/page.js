@@ -68,7 +68,6 @@ const PageDetail = () => {
                     页面详情
                 </div>
 
-                {/* 顶部标题栏及元数据区域 */}
                 <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-6 bg-gray-800/50 p-4 rounded-xl border border-white/10">
                     <div className="flex items-start gap-4">
                         <div className="mt-1 h-12 w-12 rounded-full bg-gray-900 flex items-center justify-center overflow-hidden border border-gray-700 shrink-0">
@@ -77,7 +76,6 @@ const PageDetail = () => {
                         <div>
                             <h1 className="text-2xl font-bold text-white break-all">{data.title}</h1>
                             
-                            {/* 补充的页面标签、创建者、更新时间信息块 */}
                             <div className="mt-3 flex flex-col gap-2 text-sm text-gray-400">
                                 {data.tags && data.tags.length > 0 && (
                                     <div className="flex items-center gap-2 flex-wrap">
@@ -166,9 +164,59 @@ const PageDetail = () => {
                             dangerouslySetInnerHTML={{ __html: data.content }} 
                         />
                     )}
-                    {activeTab !== '正文' && (
-                        <div className="text-gray-500 text-center py-12">
-                            {activeTab}功能尚未接入
+                    
+                    {activeTab === '源码' && (
+                        <div className="bg-gray-900 p-4 rounded-lg overflow-x-auto border border-gray-700">
+                            <pre className="text-gray-300 text-sm whitespace-pre-wrap font-mono break-all">
+                                {data.content}
+                            </pre>
+                        </div>
+                    )}
+
+                    {activeTab === '信息' && (
+                        <div className="space-y-4 text-gray-300">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="bg-gray-900/50 p-4 rounded-lg border border-gray-700">
+                                    <div className="text-gray-500 text-sm mb-1">页面标题</div>
+                                    <div className="font-medium text-white">{data.title}</div>
+                                </div>
+                                <div className="bg-gray-900/50 p-4 rounded-lg border border-gray-700">
+                                    <div className="text-gray-500 text-sm mb-1">来源站点</div>
+                                    <div>{data.siteName}</div>
+                                </div>
+                                <div className="bg-gray-900/50 p-4 rounded-lg border border-gray-700">
+                                    <div className="text-gray-500 text-sm mb-1">创建者 / 搬运者</div>
+                                    <div>{data.creator}</div>
+                                </div>
+                                <div className="bg-gray-900/50 p-4 rounded-lg border border-gray-700">
+                                    <div className="text-gray-500 text-sm mb-1">原站最后更新时间</div>
+                                    <div>{data.lastUpdated}</div>
+                                </div>
+                            </div>
+                            <div className="bg-gray-900/50 p-4 rounded-lg border border-gray-700">
+                                <div className="text-gray-500 text-sm mb-1">完整原始链接</div>
+                                <a href={data.originalUrl} target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:underline break-all">
+                                    {data.originalUrl}
+                                </a>
+                            </div>
+                        </div>
+                    )}
+
+                    {activeTab === '历史' && (
+                        <div className="text-center py-16 border border-dashed border-gray-700 rounded-lg bg-gray-900/20">
+                            <div className="text-gray-300 mb-2 font-medium">历史记录数据为空</div>
+                            <div className="text-sm text-gray-500 max-w-lg mx-auto">
+                                此页面的修改历史由 Wikidot 动态生成。目前的单页 API 仅抓取了静态 DOM 结构，没有向原站发起 `PageHistoryModule` 的 AJAX 模拟请求。
+                            </div>
+                        </div>
+                    )}
+
+                    {activeTab === '讨论' && (
+                        <div className="text-center py-16 border border-dashed border-gray-700 rounded-lg bg-gray-900/20">
+                            <div className="text-gray-300 mb-2 font-medium">讨论区数据为空</div>
+                            <div className="text-sm text-gray-500 max-w-lg mx-auto">
+                                论坛评论数据不包含在初始源码中。如果要接入讨论区，需要解析当前页面的 thread ID 并专门构建针对 `ForumViewThreadCommentsModule` 的请求。
+                            </div>
                         </div>
                     )}
                 </div>
