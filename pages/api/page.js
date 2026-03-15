@@ -14,11 +14,9 @@ export default async function handler(req, res) {
     }
 
     try {
-        // 在初始请求强制带上伪造 Cookie，防止部分站点对无 Cookie 访客返回阉割版 HTML
         const fetchHeaders = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
             'Cookie': 'wikidot_token7=123456;'
         };
 
@@ -30,14 +28,18 @@ export default async function handler(req, res) {
         const html = await response.text();
         const $ = cheerio.load(html);
 
+        // 1. 标题修复：绝对禁止退化为完整 URL
         let title = $('#page-title').text().trim();
         if (!title) {
-            title = $('title').text().trim() || '未命名页面';
-            if (title.includes(' - ')) {
-                const parts = title.split(' - ');
-                if (parts.length > 1) parts.pop();
-                title = parts.join(' - ').trim();
+            title = $('title').text().trim();
+            if (title.includes('-')) {
+                title = title.split('-')[0].trim();
             }
+        }
+        if (!title || title.startsWith('http')) {
+            // 如果只有 URL，强制截取最后一段解码为中文标题，而不是显示一长串网址
+            const urlParts = url.split('/');
+            title = decodeURIComponent(urlParts[urlParts.length - 1] || '未命名页面').replace(/-/g, ' ');
         }
 
         const contentHtml = $('#page-content').html() || '<p class="text-gray-400">无法提取到正文区域 (#page-content)。</p>';
@@ -48,119 +50,80 @@ export default async function handler(req, res) {
             if(t && !t.startsWith('_')) tags.push(t);
         });
 
-        let creator = '';
-        const printusers = $('.printuser');
-        if (printusers.length > 0) {
-            creator = printusers.last().text().trim();
-        }
-        if (!creator) {
-            creator = $('#page-info a[href*="/user:info/"]').first().text().trim();
-        }
-        if (!creator) creator = '未知 (原站未提供静态数据)';
-        
-        let lastUpdated = $('#page-info .odate').text().trim();
-        if (!lastUpdated) lastUpdated = '未知';
+        let creator = $('.printuser').last().text().trim() || $('#page-info a[href*="/user:info/"]').first().text().trim() || '未知';
+        let lastUpdated = $('.odate').text().trim() || '未知';
 
-        // 暴力提取 pageId，覆盖所有可能的 Wikidot 变体
+        // 2. 暴力提取 pageId：涵盖所有已知写法
         let pageId = null;
-        const pageIdRegexes = [
-            /WIKIDOT\.page\.listeners\.pageId\s*=\s*(\d+)/,
-            /OZONE\.request\.props\.pageId\s*=\s*(\d+)/,
-            /pageId\s*=\s*(\d+)/,
-            /page_id\s*=\s*(\d+)/,
-            /id="page-version-info".*?data-page-id="(\d+)"/
-        ];
-        
-        for (const reg of pageIdRegexes) {
-            const match = html.match(reg);
-            if (match && match[1]) {
-                pageId = match[1];
-                break;
-            }
+        const idMatch = html.match(/pageId\s*[:=]\s*['"]?(\d+)['"]?/i) || html.match(/page_id\s*[:=]\s*['"]?(\d+)['"]?/i);
+        if (idMatch && idMatch[1]) {
+            pageId = idMatch[1];
         }
 
-        let sourceCode = '无法在页面中提取到 pageId，源码抓取失败。目标网站可能拦截了爬虫或未在 HTML 中暴露变量。';
-        let historyHtml = '<div class="text-gray-500">无法在页面中提取到 pageId，历史记录抓取失败。</div>';
-        let discussionHtml = '<div class="text-gray-500 text-center">暂无讨论数据。</div>';
+        let sourceCode = '源码抓取失败：未能在原站网页中解析到 pageId。';
+        let historyHtml = '<div class="text-gray-500">历史记录抓取失败：未能在原站网页中解析到 pageId。</div>';
+        let discussionHtml = '<div class="text-gray-500 text-center">该页面暂无讨论数据。</div>';
 
         if (pageId) {
-            try {
-                const origin = new URL(url).origin;
-                const ajaxUrl = `${origin}/ajax-module-connector.php`;
-                const ajaxHeaders = {
-                    ...fetchHeaders,
-                    'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
-                };
+            const origin = new URL(url).origin;
+            const ajaxUrl = `${origin}/ajax-module-connector.php`;
+            const ajaxHeaders = {
+                ...fetchHeaders,
+                'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
+            };
 
-                // 1. 抓取源码
-                try {
-                    const srcRes = await fetch(ajaxUrl, {
-                        method: 'POST',
-                        headers: ajaxHeaders,
-                        body: `page_id=${pageId}&moduleName=viewsource/ViewSourceModule&wikidot_token7=123456`
-                    });
-                    const srcData = await srcRes.json();
-                    if (srcData.status === 'ok') {
-                        const $src = cheerio.load(srcData.body);
-                        sourceCode = $src.text().trim() || srcData.body;
-                    } else {
-                        sourceCode = `请求源码失败，原站返回: ${srcData.status}`;
-                    }
-                } catch (e) {
-                    sourceCode = `请求源码模块异常: ${e.message}`;
-                }
-
-                // 2. 抓取历史
-                try {
-                    const histRes = await fetch(ajaxUrl, {
-                        method: 'POST',
-                        headers: ajaxHeaders,
-                        body: `page_id=${pageId}&moduleName=history/PageRevisionListModule&page=1&perpage=50&wikidot_token7=123456`
-                    });
-                    const histData = await histRes.json();
-                    if (histData.status === 'ok') {
-                        historyHtml = histData.body;
-                        
-                        if (creator === '未知 (原站未提供静态数据)') {
-                            const $hist = cheerio.load(historyHtml);
-                            const originalCreator = $hist('tr').last().find('.printuser').text().trim();
-                            if (originalCreator) creator = originalCreator + ' (从历史记录提取)';
-                        }
-                    }
-                } catch (e) {}
-
-                // 3. 抓取讨论
-                let threadId = null;
-                const discussHref = $('#discuss-button').attr('href');
-                if (discussHref) {
-                    const tMatch = discussHref.match(/\/t-(\d+)/);
-                    if (tMatch) threadId = tMatch[1];
-                }
-                if (!threadId) {
+            // 3. 并发抓取三大底层模块
+            const [srcRes, histRes, discRes] = await Promise.allSettled([
+                fetch(ajaxUrl, {
+                    method: 'POST',
+                    headers: ajaxHeaders,
+                    body: `page_id=${pageId}&moduleName=viewsource/ViewSourceModule&wikidot_token7=123456`
+                }),
+                fetch(ajaxUrl, {
+                    method: 'POST',
+                    headers: ajaxHeaders,
+                    body: `page_id=${pageId}&moduleName=history/PageRevisionListModule&page=1&perpage=50&wikidot_token7=123456`
+                }),
+                (async () => {
+                    let threadId = null;
                     const tMatch = html.match(/\/forum\/t-(\d+)/);
                     if (tMatch) threadId = tMatch[1];
-                }
+                    if (!threadId) throw new Error('No thread ID');
+                    return fetch(ajaxUrl, {
+                        method: 'POST',
+                        headers: ajaxHeaders,
+                        body: `t=${threadId}&moduleName=forum/ForumViewThreadCommentsModule&pageNo=1&wikidot_token7=123456`
+                    });
+                })()
+            ]);
 
-                if (threadId) {
-                    try {
-                        const discRes = await fetch(ajaxUrl, {
-                            method: 'POST',
-                            headers: ajaxHeaders,
-                            body: `t=${threadId}&moduleName=forum/ForumViewThreadCommentsModule&pageNo=1&wikidot_token7=123456`
-                        });
-                        const discData = await discRes.json();
-                        if (discData.status === 'ok') {
-                            discussionHtml = discData.body;
-                        } else {
-                            discussionHtml = `<div class="text-gray-500 text-center">无法加载讨论，原站返回: ${discData.status}</div>`;
-                        }
-                    } catch (e) {
-                        discussionHtml = `<div class="text-red-400 text-center">请求讨论模块异常: ${e.message}</div>`;
+            // 解析源码 (避免 HTML 标签被 cheerio 误删)
+            if (srcRes.status === 'fulfilled' && srcRes.value.ok) {
+                try {
+                    const data = await srcRes.value.json();
+                    if (data.status === 'ok') {
+                        const $src = cheerio.load(data.body);
+                        let rawHtml = $src('.page-source').html() || data.body;
+                        sourceCode = rawHtml.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
                     }
-                } else {
-                    discussionHtml = '<div class="text-gray-500 text-center">该页面尚未开启讨论，或未在源码中暴露 Thread ID。</div>';
-                }
-            } catch (e) {}
+                } catch(e) {}
+            }
+
+            // 解析历史
+            if (histRes.status === 'fulfilled' && histRes.value.ok) {
+                try {
+                    const data = await histRes.value.json();
+                    if (data.status === 'ok') historyHtml = data.body;
+                } catch(e) {}
+            }
+
+            // 解析讨论
+            if (discRes.status === 'fulfilled' && discRes.value.ok) {
+                try {
+                    const data = await discRes.value.json();
+                    if (data.status === 'ok') discussionHtml = data.body;
+                } catch(e) {}
+            }
         }
 
         res.status(200).json({
