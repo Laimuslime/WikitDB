@@ -12,70 +12,80 @@ export default async function handler(req, res) {
     try {
         const fetchHeaders = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Cookie': 'wikidot_token7=123456;'
         };
 
+        const baseUrl = wikiConfig.URL.replace(/\/$/, '');
         let links = [];
+        let seen = new Set();
         let pageTitle = "全站页面索引";
 
-        const sitemapUrl = `${wikiConfig.URL.replace(/\/$/, '')}/sitemap.xml`;
-        
+        // 核心修复 1：向原站底层请求 ListPagesModule 获取所有页面的真实标题
         try {
-            const response = await fetch(sitemapUrl, { headers: fetchHeaders });
-            if (response.ok) {
-                const xml = await response.text();
-                const $ = cheerio.load(xml, { xmlMode: true });
-                
-                $('loc').each((i, el) => {
-                    const href = $(el).text().trim();
-                    if (href && href.startsWith('http') && !href.includes('/system:') && !href.includes('/admin:')) {
-                        const parts = href.split('/');
-                        const rawTitle = parts[parts.length - 1] || parts[parts.length - 2] || '';
-                        const title = rawTitle ? decodeURIComponent(rawTitle).replace(/-/g, ' ') : href;
-                        links.push({ text: title, href: href });
+            const ajaxUrl = `${baseUrl}/ajax-module-connector.php`;
+            const body = `moduleName=list%2FListPagesModule&category=*&order=created_at+desc&perPage=250&module_body=%5B%2A+%5B%5B%25%25link%25%25%7C%25%25title%25%25%5D%5D%5D&wikidot_token7=123456`;
+            
+            const ajaxRes = await fetch(ajaxUrl, {
+                method: 'POST',
+                headers: { ...fetchHeaders, 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
+                body: body
+            });
+            
+            const ajaxData = await ajaxRes.json();
+            if (ajaxData.status === 'ok' && ajaxData.body) {
+                const $ajax = cheerio.load(ajaxData.body);
+                $ajax('a').each((i, el) => {
+                    const href = $ajax(el).attr('href');
+                    const text = $ajax(el).text().trim();
+                    if (href && text && !href.includes('javascript:')) {
+                        const fullHref = href.startsWith('http') ? href : `${baseUrl}${href.startsWith('/') ? href : '/' + href}`;
+                        if (!seen.has(fullHref) && text !== fullHref) {
+                            seen.add(fullHref);
+                            links.push({ text: text, href: fullHref });
+                        }
                     }
                 });
             }
-        } catch (e) {
-            // Sitemap 抓取失败跳过，继续执行回退逻辑
-        }
+        } catch (e) {}
 
-        if (links.length === 0) {
-            const fallbackRes = await fetch(wikiConfig.URL, { headers: fetchHeaders });
-            const html = await fallbackRes.text();
-            const $ = cheerio.load(html);
-            pageTitle = $('title').text().trim() || "首页备用抓取";
-            
-            $('#page-content a').each((i, el) => {
-                const text = $(el).text().trim();
-                const href = $(el).attr('href');
-                if (href && typeof href === 'string' && !href.startsWith('javascript:') && !href.startsWith('#')) {
-                    const fullHref = href.startsWith('http') ? href : `${wikiConfig.URL.replace(/\/$/, '')}${href.startsWith('/') ? href : '/' + href}`;
-                    links.push({
-                        text: text || decodeURIComponent(fullHref.split('/').pop() || '未知页面'),
-                        href: fullHref
-                    });
+        // 核心修复 2：抓取主页侧边栏、顶栏和正文的 A 标签兜底（A 标签包含的一定是人写的真实标题）
+        try {
+            const homeRes = await fetch(wikiConfig.URL, { headers: fetchHeaders });
+            const homeHtml = await homeRes.text();
+            const $home = cheerio.load(homeHtml);
+            pageTitle = $home('title').text().trim() || "全站页面索引";
+            if (pageTitle.includes(' - ')) pageTitle = pageTitle.split(' - ')[0].trim();
+
+            $home('#nav-side a, #top-bar a, #page-content a').each((i, el) => {
+                const href = $home(el).attr('href');
+                const text = $home(el).text().trim();
+                
+                if (href && text && !href.startsWith('javascript:') && !href.startsWith('#') && !href.includes('/system:') && !href.includes('/admin:')) {
+                    const fullHref = href.startsWith('http') ? href : `${baseUrl}${href.startsWith('/') ? href : '/' + href}`;
+                    // 严格过滤掉纯 URL 和未定义文本
+                    if (!seen.has(fullHref) && text !== fullHref && !text.startsWith('http')) {
+                        seen.add(fullHref);
+                        links.push({ text: text, href: fullHref });
+                    }
                 }
             });
-        }
+        } catch (e) {}
 
-        const uniqueLinks = [];
-        const seen = new Set();
-        for (const link of links) {
-            if (link.href && link.href !== 'undefined' && !seen.has(link.href)) {
-                seen.add(link.href);
-                uniqueLinks.push({
-                    text: link.text || link.href,
-                    href: link.href
-                });
-            }
-        }
+        // 最终数据清洗，拦截所有异常数据
+        const finalLinks = links.filter(link => 
+            link.href && 
+            link.href !== 'undefined' && 
+            link.text && 
+            link.text !== 'undefined' &&
+            !link.text.startsWith('http')
+        );
 
         res.status(200).json({
             siteName: wikiConfig.NAME,
             siteUrl: wikiConfig.URL,
             pageTitle: pageTitle,
-            links: uniqueLinks
+            links: finalLinks
         });
     } catch (error) {
         res.status(500).json({ error: '全站页面抓取失败', details: error.message });
