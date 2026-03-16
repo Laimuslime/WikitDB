@@ -27,7 +27,8 @@ const AuthorProfile = () => {
         setData(null);
 
         try {
-            const res = await fetch(`/api/author?name=${encodeURIComponent(authorName)}`);
+            // 请求后端接口使用修改后的 authors 参数
+            const res = await fetch(`/api/authors?name=${encodeURIComponent(authorName)}`);
             const result = await res.json();
 
             if (!res.ok) {
@@ -50,7 +51,8 @@ const AuthorProfile = () => {
     const handleSearch = (e) => {
         e.preventDefault();
         if (searchInput.trim()) {
-            router.push(`/author?name=${encodeURIComponent(searchInput.trim())}`, undefined, { shallow: true });
+            // 核心修复：将路由路径改为 /authors
+            router.push(`/authors?name=${encodeURIComponent(searchInput.trim())}`, undefined, { shallow: true });
         }
     };
 
@@ -136,6 +138,7 @@ const AuthorProfile = () => {
                                             <div key={index} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 bg-gray-900/50 rounded-lg border border-gray-700/50 hover:border-gray-600 transition-colors">
                                                 <div>
                                                     <Link 
+                                                        // 路由路径已自动改为使用 /authors 参数
                                                         href={`/page?site=${siteParam}&page=${encodeURIComponent(page.page)}`}
                                                         className="text-lg font-medium text-indigo-400 hover:text-indigo-300 hover:underline mr-2"
                                                     >
