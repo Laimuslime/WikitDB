@@ -14,11 +14,13 @@ const AuthorProfile = () => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     const [activeTab, setActiveTab] = useState('global');
+    
+    // 新增：用于存储当前选择的过滤站点
+    const [filterSite, setFilterSite] = useState('all');
 
     useEffect(() => {
         if (!router.isReady) return;
 
-        // 有 name 查人，没 name 看榜
         if (name) {
             setSearchInput(name);
             fetchAuthorData(name);
@@ -33,6 +35,7 @@ const AuthorProfile = () => {
         setLoading(true);
         setError(null);
         setData(null);
+        setFilterSite('all'); // 每次查询新作者时，重置筛选器为“全部”
 
         try {
             const res = await fetch(`/api/authors?name=${encodeURIComponent(authorName)}`);
@@ -42,7 +45,6 @@ const AuthorProfile = () => {
                 throw new Error(result.details || result.error || '请求失败');
             }
 
-            // 文章按时间倒序
             if (result.pages?.length > 0) {
                 result.pages.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
             }
@@ -82,7 +84,6 @@ const AuthorProfile = () => {
         }
     };
 
-    // 切换排行榜数据源
     let currentRankingList = [];
     if (rankingData) {
         if (activeTab === 'global') {
@@ -92,6 +93,13 @@ const AuthorProfile = () => {
             if (siteData) currentRankingList = siteData.ranking;
         }
     }
+
+    // 新增：根据下拉框的选择，动态过滤要展示的作品列表
+    const displayedPages = data && data.pages ? (
+        filterSite === 'all' 
+            ? data.pages 
+            : data.pages.filter(page => page.wiki === filterSite)
+    ) : [];
 
     return (
         <>
@@ -121,7 +129,7 @@ const AuthorProfile = () => {
 
                 {loading && (
                     <div className="text-gray-400 flex items-center justify-center py-12">
-                        正在从 Wikit GraphQL 检索数据...
+                        正在检索数据中...
                     </div>
                 )}
 
@@ -187,13 +195,35 @@ const AuthorProfile = () => {
                         </div>
 
                         <div className="bg-gray-800/50 rounded-xl p-6 border border-white/10">
-                            <h3 className="text-xl font-semibold text-white mb-4 border-b border-gray-700 pb-2">
-                                所有发布页面 <span className="text-sm font-normal text-gray-400">(按创建时间倒序)</span>
-                            </h3>
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4 border-b border-gray-700 pb-2">
+                                <h3 className="text-xl font-semibold text-white">
+                                    所有发布页面 <span className="text-sm font-normal text-gray-400">(按创建时间倒序)</span>
+                                </h3>
+                                
+                                {/* 核心更新：媲美 Crom 的独立站点筛选器 */}
+                                {data.siteStats?.length > 0 && (
+                                    <select
+                                        value={filterSite}
+                                        onChange={(e) => setFilterSite(e.target.value)}
+                                        className="bg-gray-900 border border-gray-600 text-white text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2 outline-none cursor-pointer transition-colors"
+                                    >
+                                        <option value="all">全站总览 (All Sites)</option>
+                                        {data.siteStats.map((site, index) => {
+                                            const siteConfig = config.SUPPORT_WIKI.find(w => w.URL.includes(site.wiki));
+                                            const siteName = siteConfig ? siteConfig.NAME : site.wiki;
+                                            return (
+                                                <option key={index} value={site.wiki}>
+                                                    {siteName} ({site.count} 篇)
+                                                </option>
+                                            );
+                                        })}
+                                    </select>
+                                )}
+                            </div>
                             
-                            {data.pages?.length > 0 ? (
+                            {displayedPages.length > 0 ? (
                                 <div className="space-y-4">
-                                    {data.pages.map((page, index) => {
+                                    {displayedPages.map((page, index) => {
                                         const siteConfig = config.SUPPORT_WIKI.find(w => w.URL.includes(page.wiki));
                                         const siteParam = siteConfig ? siteConfig.PARAM : page.wiki;
                                         const dateStr = page.created_at ? new Date(page.created_at).toLocaleDateString('zh-CN') : '未知时间';
@@ -231,7 +261,7 @@ const AuthorProfile = () => {
                                 </div>
                             ) : (
                                 <div className="text-gray-500 text-center py-8">
-                                    未在收录的站点中找到该作者的任何页面。
+                                    该站点下未找到任何页面。
                                 </div>
                             )}
                         </div>
