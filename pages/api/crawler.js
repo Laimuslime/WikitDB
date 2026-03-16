@@ -9,6 +9,10 @@ export default async function handler(req, res) {
     const wikiConfig = config.SUPPORT_WIKI.find(w => w.PARAM === site);
     if (!wikiConfig) return res.status(404).json({ error: '未找到该站点配置' });
 
+    // 核心修复：从配置的 URL 提取真实的 Wiki 名称 (例如 if-backrooms) 喂给 Wikit
+    const actualWikiName = wikiConfig.URL.replace(/^https?:\/\//i, '').split('.')[0];
+    const baseUrl = wikiConfig.URL.replace(/\/$/, '');
+
     try {
         const fetchHeaders = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -16,23 +20,21 @@ export default async function handler(req, res) {
             'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8'
         };
 
-        const baseUrl = wikiConfig.URL.replace(/\/$/, '');
         let links = [];
         let seen = new Set();
         let pageTitle = "全站页面索引";
 
-        // 核心升级：优先使用 Wikit GraphQL 接口拉取全站链接
         try {
             let currentPage = 1;
             let hasNextPage = true;
 
-            // 自动翻页逻辑，确保能拉取到站点下的所有页面
             while (hasNextPage) {
                 const gqlRes = await fetch('https://wikit.unitreaty.org/apiv1/graphql', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        query: `query { articles(wiki: ["${site}"], page: ${currentPage}, pageSize: 500) { nodes { title url page } pageInfo { hasNextPage } } }`
+                        // 使用真实的 actualWikiName 
+                        query: `query { articles(wiki: ["${actualWikiName}"], page: ${currentPage}, pageSize: 500) { nodes { title url page } pageInfo { hasNextPage } } }`
                     }),
                     cache: 'no-store'
                 });
@@ -41,13 +43,11 @@ export default async function handler(req, res) {
                     const gqlJson = await gqlRes.json();
                     const articlesData = gqlJson.data?.articles;
                     
-                    if (articlesData && articlesData.nodes) {
+                    if (articlesData && articlesData.nodes && articlesData.nodes.length > 0) {
                         articlesData.nodes.forEach(node => {
-                            // 优先使用 GraphQL 返回的完整 url，如果没有则用 page 拼接
                             const fullHref = node.url || `${baseUrl}/${node.page}`;
                             const text = node.title || node.page;
                             
-                            // 依然执行严格的清洗过滤
                             if (fullHref.startsWith(baseUrl) && !fullHref.includes('/system:') && !fullHref.includes('/admin:') && !fullHref.includes('/component:') && !fullHref.includes('user:info')) {
                                 if (!seen.has(fullHref)) {
                                     seen.add(fullHref);
@@ -64,11 +64,8 @@ export default async function handler(req, res) {
                     hasNextPage = false;
                 }
             }
-        } catch (e) {
-            // GraphQL 请求异常时静默处理，自动进入下方的原生兜底
-        }
+        } catch (e) {}
 
-        // 兜底逻辑 1：如果 GraphQL 没抓到数据（可能 Wikit 还没收录该站），调用原站 list-all-pages
         if (links.length === 0) {
             try {
                 const listAllUrl = `${baseUrl}/system:list-all-pages`;
@@ -97,7 +94,6 @@ export default async function handler(req, res) {
             } catch (e) {}
         }
 
-        // 兜底逻辑 2：如果连索引页都没有，暴力提取首页所有 A 标签
         if (links.length === 0) {
             try {
                 const homeRes = await fetch(baseUrl, { headers: fetchHeaders });
