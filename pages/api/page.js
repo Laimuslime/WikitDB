@@ -24,7 +24,6 @@ export default async function handler(req, res) {
             'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8'
         };
 
-        // 1. 并发请求 GraphQL 和 原站 HTML
         const [gqlResponse, htmlResponse] = await Promise.allSettled([
             fetch('https://wikit.unitreaty.org/apiv1/graphql', {
                 method: 'POST',
@@ -40,7 +39,6 @@ export default async function handler(req, res) {
             })
         ]);
 
-        // 2. 解析 GraphQL 数据
         let gqlData = null;
         if (gqlResponse.status === 'fulfilled' && gqlResponse.value.ok) {
             try {
@@ -51,7 +49,6 @@ export default async function handler(req, res) {
             } catch (e) {}
         }
 
-        // 3. 解析原站 HTML 数据与校验
         if (htmlResponse.status === 'fulfilled' && htmlResponse.value.status === 404) {
             throw new Error(`404: 原站点中该页面不存在 (可能是死链或已被原作者删除)`);
         }
@@ -62,7 +59,6 @@ export default async function handler(req, res) {
         const html = await htmlResponse.value.text();
         const $ = cheerio.load(html);
 
-        // 4. 数据合并与覆盖：优先使用 GraphQL，DOM 提取作为兜底
         let title = gqlData?.title;
         if (!title) {
             title = $('#page-title').text().trim() || $('title').text().trim() || decodeURIComponent(pageName).replace(/-/g, ' ');
@@ -91,11 +87,9 @@ export default async function handler(req, res) {
         if (!lastUpdated) {
             lastUpdated = $('#page-info .odate').last().text().trim() || $('.odate').last().text().trim() || '未知';
         } else {
-            // 将 GraphQL 的 ISO 时间格式化为可读字符串
             lastUpdated = new Date(lastUpdated).toLocaleString('zh-CN', { hour12: false });
         }
 
-        // 5. 提取单独需要 DOM 的数据：头像与 pageId
         let creatorAvatar = null;
         const printusers = $('.printuser');
         if (printusers.length > 0) {
@@ -105,6 +99,36 @@ export default async function handler(req, res) {
             creatorAvatar = `https://www.wikidot.com${creatorAvatar.startsWith('/') ? '' : '/'}${creatorAvatar}`;
         }
 
+        // 接入 Wikit 历史记录接口
+        let historyHtml = '<div class="text-gray-500">历史记录抓取中...</div>';
+        try {
+            const wikitHistUrl = `https://wikit.unitreaty.org/wikidot/pagehistory?wiki=${site}&page=${encodeURIComponent(secureUrl)}`;
+            const histRes = await fetch(wikitHistUrl, {
+                method: 'GET',
+                headers: { 'User-Agent': fetchHeaders['User-Agent'] },
+                cache: 'no-store'
+            });
+            
+            if (histRes.ok) {
+                const histText = await histRes.text();
+                try {
+                    const histJson = JSON.parse(histText);
+                    historyHtml = histJson.body || histJson.html || histText;
+                } catch (e) {
+                    if (histText.includes('<html')) {
+                        const $hist = cheerio.load(histText);
+                        historyHtml = $hist('table.page-history').length ? $hist('table.page-history').parent().html() : $hist('body').html() || histText;
+                    } else {
+                        historyHtml = histText;
+                    }
+                }
+            } else {
+                historyHtml = `<div class="text-gray-500">Wikit API 返回错误: ${histRes.status}</div>`;
+            }
+        } catch (e) {
+            historyHtml = `<div class="text-red-400">请求 Wikit 历史接口异常: ${e.message}</div>`;
+        }
+
         let pageId = null;
         const idMatch = html.match(/pageId\s*[:=]\s*['"]?(\d+)['"]?/i) || html.match(/page_id\s*[:=]\s*['"]?(\d+)['"]?/i);
         if (idMatch && idMatch[1]) {
@@ -112,9 +136,7 @@ export default async function handler(req, res) {
         }
 
         let sourceCode = '源码抓取失败：未能在原站网页中解析到 pageId。';
-        let historyHtml = '<div class="text-gray-500">历史记录抓取失败：未能在原站网页中解析到 pageId。</div>';
 
-        // 6. 底层 AJAX 抓取源码和历史
         if (pageId) {
             const origin = new URL(secureUrl).origin;
             const ajaxUrl = `${origin}/ajax-module-connector.php`;
@@ -129,24 +151,16 @@ export default async function handler(req, res) {
                 'Cookie': 'wikidot_token7=123456;'
             };
 
-            const [srcRes, histRes] = await Promise.allSettled([
-                fetch(ajaxUrl, {
+            try {
+                const srcRes = await fetch(ajaxUrl, {
                     method: 'POST',
                     headers: ajaxHeaders,
                     body: `page_id=${pageId}&moduleName=viewsource/ViewSourceModule&wikidot_token7=123456`,
                     cache: 'no-store'
-                }),
-                fetch(ajaxUrl, {
-                    method: 'POST',
-                    headers: ajaxHeaders,
-                    body: `page_id=${pageId}&moduleName=history/PageRevisionListModule&page=1&perpage=50&wikidot_token7=123456`,
-                    cache: 'no-store'
-                })
-            ]);
+                });
 
-            if (srcRes.status === 'fulfilled' && srcRes.value.ok) {
-                try {
-                    const data = await srcRes.value.json();
+                if (srcRes.ok) {
+                    const data = await srcRes.json();
                     if (data.status === 'ok') {
                         const $src = cheerio.load(data.body);
                         let rawHtml = $src('.page-source').html() || data.body;
@@ -159,26 +173,11 @@ export default async function handler(req, res) {
                     } else {
                         sourceCode = `请求源码失败，原站返回: ${data.status}`;
                     }
-                } catch(e) {
-                    sourceCode = `解析源码数据异常: ${e.message}`;
+                } else {
+                    sourceCode = `请求源码网络错误，可能被原站拦截`;
                 }
-            } else {
-                sourceCode = `请求源码网络错误，可能被原站拦截`;
-            }
-
-            if (histRes.status === 'fulfilled' && histRes.value.ok) {
-                try {
-                    const data = await histRes.value.json();
-                    if (data.status === 'ok') {
-                        historyHtml = data.body;
-                    } else {
-                        historyHtml = `<div class="text-gray-500">请求历史记录失败，原站返回: ${data.status}</div>`;
-                    }
-                } catch(e) {
-                    historyHtml = `<div class="text-red-400">解析历史数据异常: ${e.message}</div>`;
-                }
-            } else {
-                historyHtml = `<div class="text-gray-500">请求历史记录网络错误，可能被原站拦截</div>`;
+            } catch (e) {
+                sourceCode = `解析源码数据异常: ${e.message}`;
             }
         }
 
