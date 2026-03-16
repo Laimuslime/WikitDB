@@ -2,7 +2,7 @@ const config = require('../../wikitdb.config.js');
 
 export default async function handler(req, res) {
     try {
-        // 解析配置文件，提取真实的 wiki 子域名用于 GraphQL 查询
+        // 解析配置文件，提取真实的 wiki 子域名
         const sites = config.SUPPORT_WIKI.map(wikiConfig => {
             let actualWikiName = '';
             try {
@@ -14,10 +14,11 @@ export default async function handler(req, res) {
             return { param: wikiConfig.PARAM, name: wikiConfig.NAME, actualName: actualWikiName };
         });
 
-        // 利用 GraphQL 别名组合查询：同时请求全局和所有子站的排行榜
-        let queryParts = [`global: authorRanking(by: RATING) { rank name value }`];
+        // 组合查询：同时请求全站和所有子站的排行榜 (pageSize 可以适当大一些，拉取所有数据)
+        const pageSize = 500;
+        let queryParts = [`global: authorRanking(by: RATING, page: 1, pageSize: ${pageSize}) { name value }`];
         sites.forEach((site, index) => {
-            queryParts.push(`site_${index}: authorRanking(wiki: "${site.actualName}", by: RATING) { rank name value }`);
+            queryParts.push(`site_${index}: authorRanking(wiki: "${site.actualName}", by: RATING, page: 1, pageSize: ${pageSize}) { name value }`);
         });
 
         const query = `query { ${queryParts.join('\n')} }`;
@@ -41,16 +42,40 @@ export default async function handler(req, res) {
 
         const rawData = gqlJson.data;
 
-        // 整理返回数据格式
+        // ---------------------------------------------------------
+        // 核心修复逻辑：手动执行排序并重新赋 rank
+        // ---------------------------------------------------------
+        
+        // 1. 定义一个通用的排序 + 赋 rank 的函数
+        const sortAndRankDescending = (arr) => {
+            if (!arr || !Array.isArray(arr)) return [];
+            
+            // 先按 value 进行强制降序排序 (从大到小)
+            const sortedArr = [...arr].sort((a, b) => b.value - a.value);
+
+            // 根据新的索引重新赋予 rank 字段 (排名从 1 开始)
+            return sortedArr.map((item, index) => ({
+                ...item,
+                rank: index + 1
+            }));
+        };
+
+        // 2. 对全站总排行应用新的逻辑
+        const sortedGlobalList = sortAndRankDescending(rawData.global);
+
+        // 3. 整理返回数据格式
         const responseData = {
-            global: rawData.global || [],
+            global: sortedGlobalList, // 使用排序 + 赋 rank 后的列表
             sites: sites.map((site, index) => ({
                 param: site.param,
                 name: site.name,
-                ranking: rawData[`site_${index}`] || []
+                // 对子站点的排行榜也应用相同的逻辑
+                ranking: sortAndRankDescending(rawData[`site_${index}`])
             }))
         };
 
+        // ---------------------------------------------------------
+        
         res.setHeader('Cache-Control', 's-maxage=3600, stale-while-revalidate');
         res.status(200).json(responseData);
     } catch (error) {
