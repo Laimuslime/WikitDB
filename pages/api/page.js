@@ -32,7 +32,7 @@ export default async function handler(req, res) {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    query: `query { article(wiki: "${actualWikiName}", page: "${pageName}") { title rating author tags created_at lastmod } }`
+                    query: `query { article(wiki: "${actualWikiName}", page: "${pageName}") { title rating author tags created_at lastmod page_id } }`
                 }),
                 cache: 'no-store'
             }),
@@ -122,7 +122,6 @@ export default async function handler(req, res) {
                     } else if (histJson.body || histJson.html) {
                         historyHtml = histJson.body || histJson.html;
                     } else {
-                        // 核心修复：捕获纯 JSON 对象，主动触发带头像的原生兜底，并留作二次兜底备用
                         wikitHistoryFailed = true;
                         wikitRawJson = histJson;
                     }
@@ -141,14 +140,16 @@ export default async function handler(req, res) {
             wikitHistoryFailed = true;
         }
 
-        let pageId = null;
-        const idMatch = html.match(/pageId\s*[:=]\s*['"]?(\d+)['"]?/i) || html.match(/page_id\s*[:=]\s*['"]?(\d+)['"]?/i);
-        if (idMatch && idMatch[1]) {
-            pageId = idMatch[1];
+        let pageId = gqlData?.page_id || null;
+        if (!pageId) {
+            const idMatch = html.match(/pageId\s*[:=]\s*['"]?(\d+)['"]?/i) || html.match(/page_id\s*[:=]\s*['"]?(\d+)['"]?/i);
+            if (idMatch && idMatch[1]) {
+                pageId = idMatch[1];
+            }
         }
 
         let sourceCode = '源码抓取失败：未能在原站网页中解析到 pageId。';
-        let ratingTable = []; // 用于存储解析后的评分表
+        let ratingTable = [];
 
         if (pageId) {
             const origin = new URL(secureUrl).origin;
@@ -164,7 +165,6 @@ export default async function handler(req, res) {
                 'Cookie': 'wikidot_token7=123456;'
             };
 
-            // 独立启动评分表的并行请求，不污染原有的 fetchPromises 数组
             const ratingFetchPromise = fetch(ajaxUrl, {
                 method: 'POST',
                 headers: ajaxHeaders,
@@ -228,7 +228,6 @@ export default async function handler(req, res) {
                 } catch(e) {}
             }
 
-            // 提取评分表数据
             try {
                 const rateRes = await ratingFetchPromise;
                 if (rateRes.ok) {
@@ -252,13 +251,11 @@ export default async function handler(req, res) {
                             }
                             ratingTable.push({ user, avatar, vote });
                         });
-                        // 评分去重
                         ratingTable = ratingTable.filter((v, i, a) => a.findIndex(t => (t.user === v.user)) === i);
                     }
                 }
             } catch (e) {}
 
-            // 核心修复：原生接口兜底失败时，将 JSON 自动解析为表格
             if (wikitHistoryFailed && !nativeHistorySuccess) {
                 if (wikitRawJson) {
                     let rows = [];
@@ -336,7 +333,8 @@ export default async function handler(req, res) {
             lastUpdated: lastUpdated,
             sourceCode: sourceCode,
             historyHtml: historyHtml,
-            ratingTable: ratingTable // 新增的评分表数据已完美整合
+            ratingTable: ratingTable,
+            pageId: pageId
         });
     } catch (error) {
         res.status(500).json({ error: '详情页抓取失败', details: error.message });
