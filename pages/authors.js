@@ -27,7 +27,6 @@ const AuthorProfile = () => {
         setData(null);
 
         try {
-            // 请求后端接口使用修改后的 authors 参数
             const res = await fetch(`/api/authors?name=${encodeURIComponent(authorName)}`);
             const result = await res.json();
 
@@ -35,7 +34,6 @@ const AuthorProfile = () => {
                 throw new Error(result.details || result.error || '请求失败');
             }
 
-            // 按时间倒序排列作品列表 (最新的在前)
             if (result.pages && result.pages.length > 0) {
                 result.pages.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
             }
@@ -51,7 +49,6 @@ const AuthorProfile = () => {
     const handleSearch = (e) => {
         e.preventDefault();
         if (searchInput.trim()) {
-            // 核心修复：将路由路径改为 /authors
             router.push(`/authors?name=${encodeURIComponent(searchInput.trim())}`, undefined, { shallow: true });
         }
     };
@@ -94,37 +91,64 @@ const AuthorProfile = () => {
 
                 {data && (
                     <div className="space-y-8">
-                        {/* 头部信息 */}
                         <div className="flex items-center gap-6">
                             <img 
                                 src={data.avatar} 
                                 alt={data.name} 
-                                className="w-24 h-24 rounded-lg object-cover border-2 border-gray-700"
+                                className="w-24 h-24 rounded-lg object-cover border-2 border-gray-700 bg-gray-900"
                                 onError={(e) => { e.target.src = 'https://www.wikidot.com/local--favicon/favicon.gif'; }}
                             />
                             <div>
                                 <h2 className="text-3xl font-bold text-white mb-2">{data.name}</h2>
                                 <div className="text-sm text-gray-400">
-                                    Wikidot Profile 数据同步自 Wikit GraphQL
+                                    数据同步自 Wikit GraphQL 数据库
                                 </div>
                             </div>
                         </div>
 
-                        {/* 数据总览 (Overview) */}
+                        {/* 全站数据总览 */}
                         <div className="bg-gray-800/50 rounded-xl p-6 border border-white/10">
-                            <h3 className="text-xl font-semibold text-white mb-4 border-b border-gray-700 pb-2">Overview (全站数据统计)</h3>
-                            <p className="text-gray-300 leading-relaxed">
-                                <span className="font-semibold text-indigo-400">{data.name}</span> is ranked <span className="font-semibold text-white">#{data.globalRank}</span>, 
-                                with a total of <span className="font-semibold text-white">{data.totalPages}</span> pages 
-                                having a total rating of <span className="font-semibold text-green-400">+{data.totalRating}</span> and 
-                                an average rating of <span className="font-semibold text-white">+{data.averageRating}</span>.
+                            <h3 className="text-xl font-semibold text-white mb-4 border-b border-gray-700 pb-2">全站数据总览 (Overview)</h3>
+                            <p className="text-gray-300 leading-relaxed mb-6">
+                                <span className="font-semibold text-indigo-400">{data.name}</span> 在所有站点中全局排名 <span className="font-semibold text-white">#{data.globalRank}</span>。
+                                共计拥有 <span className="font-semibold text-white">{data.totalPages}</span> 个页面，
+                                累计总评分为 <span className="font-semibold text-green-400">{data.totalRating > 0 ? `+${data.totalRating}` : data.totalRating}</span>，
+                                平均评分为 <span className="font-semibold text-white">{data.averageRating > 0 ? `+${data.averageRating}` : data.averageRating}</span>。
                             </p>
+
+                            {/* 各站点独立排名面板 */}
+                            {data.siteStats && data.siteStats.length > 0 && (
+                                <>
+                                    <h4 className="text-lg font-medium text-white mb-3">所属站点数据分布：</h4>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                                        {data.siteStats.map((site, index) => {
+                                            const siteConfig = config.SUPPORT_WIKI.find(w => w.URL.includes(site.wiki));
+                                            const siteName = siteConfig ? siteConfig.NAME : site.wiki;
+                                            return (
+                                                <div key={index} className="bg-gray-900/50 p-4 rounded-lg border border-gray-700">
+                                                    <div className="font-medium text-indigo-400 mb-2 truncate" title={siteName}>{siteName}</div>
+                                                    <div className="text-sm text-gray-400 space-y-1">
+                                                        <div className="flex justify-between"><span>站点排名:</span> <span className="text-white font-medium">#{site.rank}</span></div>
+                                                        <div className="flex justify-between"><span>页面总数:</span> <span className="text-white">{site.count}</span></div>
+                                                        <div className="flex justify-between">
+                                                            <span>站点总分:</span> 
+                                                            <span className={`font-medium ${site.rating > 0 ? 'text-green-400' : site.rating < 0 ? 'text-red-400' : 'text-gray-300'}`}>
+                                                                {site.rating > 0 ? `+${site.rating}` : site.rating}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </>
+                            )}
                         </div>
 
                         {/* 作品列表 */}
                         <div className="bg-gray-800/50 rounded-xl p-6 border border-white/10">
                             <h3 className="text-xl font-semibold text-white mb-4 border-b border-gray-700 pb-2">
-                                Pages on all sites <span className="text-sm font-normal text-gray-400">(按创建时间倒序)</span>
+                                所有发布页面 <span className="text-sm font-normal text-gray-400">(按创建时间倒序)</span>
                             </h3>
                             
                             {data.pages.length > 0 ? (
@@ -136,28 +160,28 @@ const AuthorProfile = () => {
 
                                         return (
                                             <div key={index} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 bg-gray-900/50 rounded-lg border border-gray-700/50 hover:border-gray-600 transition-colors">
-                                                <div>
-                                                    <Link 
-                                                        // 路由路径已自动改为使用 /authors 参数
-                                                        href={`/page?site=${siteParam}&page=${encodeURIComponent(page.page)}`}
-                                                        className="text-lg font-medium text-indigo-400 hover:text-indigo-300 hover:underline mr-2"
-                                                    >
-                                                        {page.title || page.page}
-                                                    </Link>
-                                                    <span className={`text-sm font-semibold ${page.rating > 0 ? 'text-green-400' : page.rating < 0 ? 'text-red-400' : 'text-gray-400'}`}>
-                                                        ({page.rating > 0 ? `+${page.rating}` : page.rating})
-                                                    </span>
-                                                    <div className="text-xs text-gray-500 mt-1">
+                                                <div className="flex-1 min-w-0 pr-4">
+                                                    <div className="flex items-baseline flex-wrap gap-2">
+                                                        <Link 
+                                                            href={`/page?site=${siteParam}&page=${encodeURIComponent(page.page)}`}
+                                                            className="text-lg font-medium text-indigo-400 hover:text-indigo-300 hover:underline truncate"
+                                                        >
+                                                            {page.title || page.page}
+                                                        </Link>
+                                                        <span className={`text-sm font-semibold whitespace-nowrap ${page.rating > 0 ? 'text-green-400' : page.rating < 0 ? 'text-red-400' : 'text-gray-400'}`}>
+                                                            ({page.rating > 0 ? `+${page.rating}` : page.rating})
+                                                        </span>
+                                                    </div>
+                                                    <div className="text-xs text-gray-500 mt-1 truncate">
                                                         发布于 {dateStr} • 所在站点: {page.wiki}
                                                     </div>
                                                 </div>
                                                 
-                                                {/* 如果有原链接，提供直接访问原站的按钮 */}
                                                 <a 
                                                     href={`http://${page.wiki}.wikidot.com/${page.page}`}
                                                     target="_blank"
                                                     rel="noopener noreferrer"
-                                                    className="text-xs px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded border border-gray-600 transition-colors whitespace-nowrap text-center"
+                                                    className="text-xs px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded border border-gray-600 transition-colors whitespace-nowrap text-center shrink-0"
                                                 >
                                                     在原站打开
                                                 </a>
