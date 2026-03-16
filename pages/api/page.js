@@ -32,7 +32,8 @@ export default async function handler(req, res) {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    query: `query { article(wiki: "${actualWikiName}", page: "${pageName}") { title rating author tags created_at lastmod page_id } }`
+                    // 在此处增加了 upvotes 和 downvotes
+                    query: `query { article(wiki: "${actualWikiName}", page: "${pageName}") { title rating upvotes downvotes author tags created_at lastmod page_id } }`
                 }),
                 cache: 'no-store'
             }),
@@ -149,7 +150,6 @@ export default async function handler(req, res) {
         }
 
         let sourceCode = '源码抓取失败：未能在原站网页中解析到 pageId。';
-        let ratingTable = [];
 
         if (pageId) {
             const origin = new URL(secureUrl).origin;
@@ -164,13 +164,6 @@ export default async function handler(req, res) {
                 'Referer': secureUrl,
                 'Cookie': 'wikidot_token7=123456;'
             };
-
-            const ratingFetchPromise = fetch(ajaxUrl, {
-                method: 'POST',
-                headers: ajaxHeaders,
-                body: `page_id=${pageId}&moduleName=pagerate/WhoRatedPageModule&wikidot_token7=123456`,
-                cache: 'no-store'
-            });
 
             const fetchPromises = [
                 fetch(ajaxUrl, {
@@ -227,34 +220,6 @@ export default async function handler(req, res) {
                     }
                 } catch(e) {}
             }
-
-            try {
-                const rateRes = await ratingFetchPromise;
-                if (rateRes.ok) {
-                    const rateJson = await rateRes.json();
-                    if (rateJson.status === 'ok' && rateJson.body) {
-                        const $rate = cheerio.load(rateJson.body);
-                        $rate('.printuser').each((i, el) => {
-                            const user = $rate(el).text().trim();
-                            let vote = '+1';
-                            const parentHtml = $rate(el).parent().text() || '';
-                            if (parentHtml.includes('-')) vote = '-1';
-                            else if (parentHtml.includes('+')) vote = '+1';
-
-                            const imgTag = $rate(el).find('img').attr('src');
-                            let avatar = '';
-                            if (imgTag) {
-                                avatar = imgTag.startsWith('http') ? imgTag : `https://www.wikidot.com${imgTag}`;
-                            } else {
-                                const accountStr = user.toLowerCase().replace(/_/g, '-').replace(/ /g, '-');
-                                avatar = `https://www.wikidot.com/avatar.php?account=${accountStr}`;
-                            }
-                            ratingTable.push({ user, avatar, vote });
-                        });
-                        ratingTable = ratingTable.filter((v, i, a) => a.findIndex(t => (t.user === v.user)) === i);
-                    }
-                }
-            } catch (e) {}
 
             if (wikitHistoryFailed && !nativeHistorySuccess) {
                 if (wikitRawJson) {
@@ -330,10 +295,11 @@ export default async function handler(req, res) {
             creatorName: creatorName,
             creatorAvatar: creatorAvatar,
             rating: rating,
+            upvotes: gqlData?.upvotes,
+            downvotes: gqlData?.downvotes,
             lastUpdated: lastUpdated,
             sourceCode: sourceCode,
             historyHtml: historyHtml,
-            ratingTable: ratingTable,
             pageId: pageId
         });
     } catch (error) {
