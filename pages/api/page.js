@@ -16,7 +16,6 @@ export default async function handler(req, res) {
         return res.status(404).json({ error: '未找到该站点配置' });
     }
 
-    // 核心修复：提取真实的 wiki 名称，喂给 GraphQL 和历史接口
     const actualWikiName = wikiConfig.URL.replace(/^https?:\/\//i, '').split('.')[0];
     const baseUrl = wikiConfig.URL.replace(/\/$/, '');
     const secureUrl = `${baseUrl}/${pageName}`;
@@ -33,7 +32,6 @@ export default async function handler(req, res) {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    // 使用 actualWikiName 替换 site
                     query: `query { article(wiki: "${actualWikiName}", page: "${pageName}") { title rating author tags created_at lastmod } }`
                 }),
                 cache: 'no-store'
@@ -105,9 +103,9 @@ export default async function handler(req, res) {
 
         let historyHtml = '';
         let wikitHistoryFailed = false; 
+        let wikitRawJson = null;
 
         try {
-            // 同样使用 actualWikiName
             const wikitHistUrl = `https://wikit.unitreaty.org/wikidot/pagehistory?wiki=${actualWikiName}&page=${encodeURIComponent(secureUrl)}`;
             const histRes = await fetch(wikitHistUrl, {
                 method: 'GET',
@@ -121,8 +119,12 @@ export default async function handler(req, res) {
                     const histJson = JSON.parse(histText);
                     if (histJson.error || Array.isArray(histJson)) {
                         wikitHistoryFailed = true;
+                    } else if (histJson.body || histJson.html) {
+                        historyHtml = histJson.body || histJson.html;
                     } else {
-                        historyHtml = histJson.body || histJson.html || histText;
+                        // 核心修复：捕获纯 JSON 对象，主动触发带头像的原生兜底，并留作二次兜底备用
+                        wikitHistoryFailed = true;
+                        wikitRawJson = histJson;
                     }
                 } catch (e) {
                     if (histText.includes('<html') || histText.includes('<table')) {
@@ -206,25 +208,54 @@ export default async function handler(req, res) {
                 sourceCode = `请求源码网络错误，可能被原站拦截`;
             }
 
-            if (wikitHistoryFailed && results[1]) {
-                const histRes = results[1];
-                if (histRes.status === 'fulfilled' && histRes.value.ok) {
-                    try {
-                        const data = await histRes.value.json();
-                        if (data.status === 'ok') {
-                            historyHtml = data.body;
-                        } else {
-                            historyHtml = `<div class="text-gray-500">原生历史请求失败，原站返回: ${data.status}</div>`;
-                        }
-                    } catch(e) {
-                        historyHtml = `<div class="text-red-400">原生历史解析异常: ${e.message}</div>`;
+            let nativeHistorySuccess = false;
+            if (wikitHistoryFailed && results[1] && results[1].status === 'fulfilled' && results[1].value.ok) {
+                try {
+                    const data = await results[1].value.json();
+                    if (data.status === 'ok') {
+                        historyHtml = data.body;
+                        nativeHistorySuccess = true;
                     }
+                } catch(e) {}
+            }
+
+            // 核心修复：原生接口兜底失败时，将 JSON 自动解析为表格
+            if (wikitHistoryFailed && !nativeHistorySuccess) {
+                if (wikitRawJson) {
+                    let rows = [];
+                    for (const key in wikitRawJson) {
+                        if (key.startsWith('rev')) rows.push(wikitRawJson[key]);
+                    }
+                    rows.sort((a, b) => parseInt(b.revRow || 0) - parseInt(a.revRow || 0));
+                    let tableHtml = '<table class="page-history"><tbody>';
+                    for (const row of rows) {
+                        const dateStr = row.changeTime ? new Date(parseInt(row.changeTime) * 1000).toLocaleString('zh-CN', { hour12: false }) : '';
+                        tableHtml += `<tr><td>${row.revRow || ''}.</td><td>${row.flag || ''}</td><td><span class="printuser">${row.username || '未知'}</span></td><td>${dateStr}</td><td>${row.comment || ''}</td></tr>`;
+                    }
+                    tableHtml += '</tbody></table>';
+                    historyHtml = tableHtml;
                 } else {
                     historyHtml = `<div class="text-gray-500">Wikit 历史为空，且原生历史请求被拦截。</div>`;
                 }
             }
+
         } else if (wikitHistoryFailed) {
-            historyHtml = '<div class="text-gray-500">历史记录抓取失败：Wikit 接口无数据，且未能在原站网页中解析到 pageId 进行兜底。</div>';
+            if (wikitRawJson) {
+                let rows = [];
+                for (const key in wikitRawJson) {
+                    if (key.startsWith('rev')) rows.push(wikitRawJson[key]);
+                }
+                rows.sort((a, b) => parseInt(b.revRow || 0) - parseInt(a.revRow || 0));
+                let tableHtml = '<table class="page-history"><tbody>';
+                for (const row of rows) {
+                    const dateStr = row.changeTime ? new Date(parseInt(row.changeTime) * 1000).toLocaleString('zh-CN', { hour12: false }) : '';
+                    tableHtml += `<tr><td>${row.revRow || ''}.</td><td>${row.flag || ''}</td><td><span class="printuser">${row.username || '未知'}</span></td><td>${dateStr}</td><td>${row.comment || ''}</td></tr>`;
+                }
+                tableHtml += '</tbody></table>';
+                historyHtml = tableHtml;
+            } else {
+                historyHtml = '<div class="text-gray-500">历史记录抓取失败：Wikit 接口无数据，且未能在原站网页中解析到 pageId 进行兜底。</div>';
+            }
         }
 
         if (historyHtml && !historyHtml.startsWith('{')) {
