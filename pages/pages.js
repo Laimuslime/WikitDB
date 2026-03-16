@@ -7,6 +7,7 @@ const Pages = () => {
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
+    const [searchQuery, setSearchQuery] = useState('');
     
     const [selectedSite, setSelectedSite] = useState(config.SUPPORT_WIKI[0]?.PARAM);
 
@@ -34,9 +35,15 @@ const Pages = () => {
 
     useEffect(() => {
         if (selectedSite) {
+            setSearchQuery(''); // 切换站点时清空搜索框
             fetchCrawlerData(selectedSite);
         }
     }, [selectedSite]);
+
+    // 实时过滤搜索结果
+    const filteredLinks = data?.links?.filter(link => 
+        link.text.toLowerCase().includes(searchQuery.toLowerCase())
+    ) || [];
 
     return (
         <>
@@ -87,14 +94,26 @@ const Pages = () => {
                                 </p>
                             </div>
 
-                            <h3 className="text-lg text-gray-300 mb-4">
-                                提取到的页面总数: {data.links ? data.links.length : 0}
-                            </h3>
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+                                <h3 className="text-lg text-gray-300">
+                                    提取到的页面总数: {data.links ? data.links.length : 0}
+                                </h3>
+                                
+                                <div className="relative w-full sm:w-72">
+                                    <input
+                                        type="text"
+                                        placeholder="搜索当前站点的页面标题..."
+                                        value={searchQuery}
+                                        onChange={(e) => setSearchQuery(e.target.value)}
+                                        className="w-full bg-gray-900 border border-gray-600 text-white text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2.5 placeholder-gray-500 transition-colors"
+                                    />
+                                </div>
+                            </div>
                             
-                            {data.links && data.links.length > 0 ? (
+                            {filteredLinks.length > 0 ? (
                                 <div className="max-h-[600px] overflow-y-auto pr-4 border border-gray-700/50 rounded-lg p-4 bg-gray-900/30">
                                     <ul className="space-y-2 grid grid-cols-1 md:grid-cols-2 gap-x-4">
-                                        {data.links.map((link, index) => (
+                                        {filteredLinks.map((link, index) => (
                                             <li key={index} className="text-gray-400 flex items-baseline gap-2 truncate">
                                                 <span className="text-gray-600 text-xs w-8 shrink-0">{index + 1}.</span>
                                                 <Link 
@@ -109,7 +128,11 @@ const Pages = () => {
                                     </ul>
                                 </div>
                             ) : (
-                                <p className="text-gray-500">未能解析到任何页面。</p>
+                                <div className="text-center py-12 border border-dashed border-gray-700 rounded-lg bg-gray-900/20">
+                                    <p className="text-gray-500">
+                                        {searchQuery ? '未找到包含该关键词的页面。' : '未能解析到任何页面。'}
+                                    </p>
+                                </div>
                             )}
                         </div>
                     )}
