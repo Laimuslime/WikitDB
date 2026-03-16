@@ -8,23 +8,24 @@ export default async function handler(req, res) {
     try {
         const queryName = name.trim();
         
-        // 1. 使用你提供的专门接口获取作者全局排名及统计数据
+        // 1. 获取全局排名
         const rankRes = await fetch(`https://wikit.unitreaty.org/wikidot/rank?user=${encodeURIComponent(queryName)}`, {
             method: 'GET',
             cache: 'no-store'
         });
         
-        let rankData = {};
+        let globalRank = '无记录';
         if (rankRes.ok) {
             try {
-                rankData = await rankRes.json();
+                const rankData = await rankRes.json();
+                globalRank = rankData.rank || rankData.global_rank || '无记录';
             } catch (e) {}
         }
 
-        // 2. 依然使用 GraphQL 获取具体的作品列表
-        const query = `
+        // 2. 获取所有文章
+        const articlesQuery = `
         query {
-          articles: articles(author: "${queryName}", page: 1, pageSize: 500) {
+          articles(author: "${queryName}", page: 1, pageSize: 500) {
             nodes {
               title
               wiki
@@ -32,41 +33,76 @@ export default async function handler(req, res) {
               rating
               created_at
             }
-            pageInfo {
-              total
-            }
           }
         }`;
 
         const gqlRes = await fetch('https://wikit.unitreaty.org/apiv1/graphql', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query }),
+            body: JSON.stringify({ query: articlesQuery }),
             cache: 'no-store'
         });
 
         let articlesData = [];
-        let totalPagesGql = 0;
         if (gqlRes.ok) {
             const gqlJson = await gqlRes.json();
             if (!gqlJson.errors && gqlJson.data && gqlJson.data.articles) {
                 articlesData = gqlJson.data.articles.nodes || [];
-                totalPagesGql = gqlJson.data.articles.pageInfo?.total || 0;
             }
         }
 
+        // 3. 核心修复：如果在 REST 接口查不到，直接在本地遍历所有文章算出绝对准确的总分，并按站点分组
+        let calcGlobalRating = 0;
+        const siteStatsMap = {};
+
+        articlesData.forEach(article => {
+            const r = article.rating || 0;
+            calcGlobalRating += r;
+            
+            const w = article.wiki;
+            if (!siteStatsMap[w]) {
+                siteStatsMap[w] = { wiki: w, count: 0, rating: 0, rank: '无记录' };
+            }
+            siteStatsMap[w].count += 1;
+            siteStatsMap[w].rating += r;
+        });
+
+        const totalPages = articlesData.length;
+        const totalRating = calcGlobalRating;
+        const averageRating = totalPages > 0 ? (totalRating / totalPages).toFixed(1) : 0;
+
+        // 4. 新增功能：利用 GraphQL 组合查询，一次性获取作者在所有涉及站点的独立排名
+        const uniqueWikis = Object.keys(siteStatsMap);
+        if (uniqueWikis.length > 0) {
+            let rankQueryParts = uniqueWikis.map((w, index) => {
+                return `site_${index}: authorWikiRank(wiki: "${w}", name: "${queryName}", by: RATING) { rank }`;
+            }).join('\n');
+
+            const rankGqlQuery = `query {\n${rankQueryParts}\n}`;
+            const siteRankRes = await fetch('https://wikit.unitreaty.org/apiv1/graphql', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query: rankGqlQuery }),
+                cache: 'no-store'
+            });
+
+            if (siteRankRes.ok) {
+                const siteRankJson = await siteRankRes.json();
+                if (siteRankJson.data) {
+                    uniqueWikis.forEach((w, index) => {
+                        const siteData = siteRankJson.data[`site_${index}`];
+                        if (siteData && siteData.rank) {
+                            siteStatsMap[w].rank = siteData.rank;
+                        }
+                    });
+                }
+            }
+        }
+
+        const siteStats = Object.values(siteStatsMap).sort((a, b) => b.count - a.count);
+
         const accountName = encodeURIComponent(queryName.toLowerCase().replace(/_/g, '-').replace(/ /g, '-'));
         const avatarUrl = `https://www.wikidot.com/avatar.php?account=${accountName}`;
-
-        // 防御性解析 REST 接口的返回字段，并与 GraphQL 的总数进行兜底比对
-        const globalRank = rankData.rank || rankData.global_rank || '无记录';
-        const totalRating = rankData.rating || rankData.score || rankData.total_rating || 0;
-        const totalPages = rankData.pages || rankData.count || rankData.total_pages || totalPagesGql;
-        
-        let averageRating = 0;
-        if (totalPages > 0) {
-            averageRating = (totalRating / totalPages).toFixed(1);
-        }
 
         const authorData = {
             name: queryName,
@@ -75,6 +111,7 @@ export default async function handler(req, res) {
             totalRating: totalRating,
             totalPages: totalPages,
             averageRating: averageRating,
+            siteStats: siteStats,
             pages: articlesData
         };
 
