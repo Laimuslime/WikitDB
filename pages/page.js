@@ -5,7 +5,8 @@ const config = require('../wikitdb.config.js');
 
 const PageDetail = () => {
     const router = useRouter();
-    const { site, url } = router.query;
+    // 核心更改：读取参数变为 page
+    const { site, page } = router.query;
     
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -15,12 +16,13 @@ const PageDetail = () => {
     const tabs = ['源码', '信息', '历史'];
 
     const fetchPageData = async () => {
-        if (!site || !url) return;
+        if (!site || !page) return;
         setLoading(true);
         setError(null);
         
         try {
-            const apiUrl = `/api/page?site=${site}&url=${encodeURIComponent(url)}`;
+            // 请求后端接口使用 page 参数
+            const apiUrl = `/api/page?site=${site}&page=${encodeURIComponent(page)}`;
             const res = await fetch(apiUrl);
             const result = await res.json();
             
@@ -40,7 +42,7 @@ const PageDetail = () => {
         if (router.isReady) {
             fetchPageData();
         }
-    }, [router.isReady, site, url]);
+    }, [router.isReady, site, page]);
 
     if (loading) {
         return <div className="py-12 text-center text-gray-400">加载详情数据中...</div>;
