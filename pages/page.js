@@ -10,9 +10,9 @@ const PageDetail = () => {
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [activeTab, setActiveTab] = useState('正文');
+    const [activeTab, setActiveTab] = useState('源码');
 
-    const tabs = ['正文', '源码', '信息', '历史'];
+    const tabs = ['源码', '信息', '历史'];
 
     const fetchPageData = async () => {
         if (!site || !url) return;
@@ -169,13 +169,6 @@ const PageDetail = () => {
                 </div>
 
                 <div className="bg-gray-800/30 rounded-xl p-6 border border-white/5 min-h-[400px]">
-                    {activeTab === '正文' && (
-                        <div 
-                            className="prose prose-invert max-w-none break-words"
-                            dangerouslySetInnerHTML={{ __html: data.content }} 
-                        />
-                    )}
-                    
                     {activeTab === '源码' && (
                         <div className="bg-gray-900 p-4 rounded-lg overflow-x-auto border border-gray-700">
                             <pre className="text-gray-300 text-sm whitespace-pre-wrap font-mono break-all">
