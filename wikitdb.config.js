@@ -12,7 +12,7 @@ module.exports = {
             PARAM: "dfc"
         },
         {
-            NAME: "If-backrooms",
+            NAME: "后室IF分站",
             URL: "https://if-backrooms.wikidot.com/",
             ImgURL: "https://laimu.backroomswiki.top/img/Logo.png",
             PARAM: "if"
