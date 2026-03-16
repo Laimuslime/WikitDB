@@ -101,7 +101,8 @@ const AuthorProfile = () => {
             <div className="py-8">
                 <div className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-700 pb-6">
                     <h1 className="text-3xl font-bold text-white">
-                        {data ? '作者信息查询' : '作者评分排行榜'}
+                        {/* 核心修改：将原本的 '作者信息查询' 修改为更简洁的 '作者信息' */}
+                        {data ? '作者信息' : '作者评分排行榜'}
                     </h1>
                     
                     <form onSubmit={handleSearch} className="relative w-full sm:w-80">
