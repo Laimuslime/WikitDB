@@ -1,0 +1,1 @@
+WikitDB由Laimu_slime根据lestday233创建的WikitDB样式更改制作，使用WikitAPI进行数据拉取。
