@@ -193,13 +193,8 @@ export default async function handler(req, res) {
                     const data = await srcRes.value.json();
                     if (data.status === 'ok') {
                         const $src = cheerio.load(data.body);
-                        let rawHtml = $src('.page-source').html() || data.body;
-                        rawHtml = rawHtml.replace(/<br\s*\/?>/gi, '\n');
-                        sourceCode = rawHtml.replace(/&lt;/g, '<')
-                                            .replace(/&gt;/g, '>')
-                                            .replace(/&amp;/g, '&')
-                                            .replace(/&quot;/g, '"')
-                                            .trim();
+                        // 按照 Kakushi 的要求：剥掉最外层div，其他原样填入，不使用正则做任何转换
+                        sourceCode = $src('.page-source').html() || data.body;
                     } else {
                         sourceCode = `请求源码失败，原站返回: ${data.status}`;
                     }
