@@ -40,7 +40,7 @@ module.exports = {
             ImgURL: "https://scp-wiki-cloud.wdfiles.com/local--files/start/scp-cloud-logo.png",
             PARAM: "scp-wiki-cloud",
             WIKIT_ID: "scp-wiki-cloud"
-        }
+        },
         {
             NAME: "规则怪谈档案馆",
             URL: "https://rule-wiki.wikidot.com/",
