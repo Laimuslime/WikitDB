@@ -71,7 +71,7 @@ const MemberAdmin = () => {
                     <form onSubmit={handleSubmit} className="space-y-5">
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                             <div>
-                                <label className="block text-sm font-medium text-gray-300 mb-1">目标站点 (wiki)</label>
+                                <label className="block text-sm font-medium text-gray-300 mb-1">目标站点</label>
                                 <input
                                     type="text"
                                     name="wiki"
@@ -83,7 +83,7 @@ const MemberAdmin = () => {
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-300 mb-1">接口凭证 (token)</label>
+                                <label className="block text-sm font-medium text-gray-300 mb-1">接口Token</label>
                                 <input
                                     type="text"
                                     name="token"
@@ -98,7 +98,7 @@ const MemberAdmin = () => {
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                             <div>
-                                <label className="block text-sm font-medium text-gray-300 mb-1">管理员用户名 (username)</label>
+                                <label className="block text-sm font-medium text-gray-300 mb-1">管理员用户名</label>
                                 <input
                                     type="text"
                                     name="username"
@@ -109,7 +109,7 @@ const MemberAdmin = () => {
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-300 mb-1">管理员密码 (password)</label>
+                                <label className="block text-sm font-medium text-gray-300 mb-1">管理员密码</label>
                                 <input
                                     type="password"
                                     name="password"
@@ -122,7 +122,7 @@ const MemberAdmin = () => {
                         </div>
 
                         <div>
-                            <label className="block text-sm font-medium text-gray-300 mb-1">操作目标用户 (member)</label>
+                            <label className="block text-sm font-medium text-gray-300 mb-1">操作目标用户</label>
                             <input
                                 type="text"
                                 name="member"
@@ -135,7 +135,7 @@ const MemberAdmin = () => {
                         </div>
 
                         <div>
-                            <label className="block text-sm font-medium text-gray-300 mb-1">执行操作 (action)</label>
+                            <label className="block text-sm font-medium text-gray-300 mb-1">执行操作</label>
                             <select
                                 name="action"
                                 value={formData.action}
@@ -149,7 +149,7 @@ const MemberAdmin = () => {
 
                         {formData.action === 'ban' && (
                             <div>
-                                <label className="block text-sm font-medium text-gray-300 mb-1">封禁理由 (reason)</label>
+                                <label className="block text-sm font-medium text-gray-300 mb-1">封禁理由</label>
                                 <textarea
                                     name="reason"
                                     rows="3"
