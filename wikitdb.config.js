@@ -3,7 +3,15 @@ module.exports = {
     SITE_URL: '',
     SITE_SINCE: '2026',
     SITE_AUTHOR: 'WikitDB Team',
-
+/*站点添加格式
+        {
+            NAME: "站点名称",
+            URL: "站点链接",
+            ImgURL: "站点Logo链接",
+            PARAM: "站点简写",
+            WIKIT_ID: "Wikit站点里写的站点名称，这里用于筛选作者的站点页面"
+        },
+        */
     SUPPORT_WIKI: [
         {
             NAME: "深林文学部",
@@ -33,5 +41,12 @@ module.exports = {
             PARAM: "scp-wiki-cloud",
             WIKIT_ID: "scp-wiki-cloud"
         }
+        {
+            NAME: "规则怪谈档案馆",
+            URL: "https://rule-wiki.wikidot.com/",
+            ImgURL: "https://rule-wiki.wdfiles.com/local--files/component%3Atheme/rule-wiki-new.svg",
+            PARAM: "rule",
+            WIKIT_ID: "rule-wiki"
+        },
     ]
 };
