@@ -56,7 +56,7 @@ const MemberAdmin = () => {
     return (
         <>
             <Head>
-                <title>成员管理- {config.SITE_NAME}</title>
+                <title>成员管理 - {config.SITE_NAME}</title>
             </Head>
 
             <div className="py-8 max-w-2xl mx-auto">
@@ -76,14 +76,14 @@ const MemberAdmin = () => {
                                     type="text"
                                     name="wiki"
                                     required
-                                    placeholder="填入简写，如 if-backrooms"
+                                    placeholder="填入简写，如 backrooms-wiki-cn"
                                     value={formData.wiki}
                                     onChange={handleChange}
                                     className="w-full bg-gray-900 border border-gray-600 text-white text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2.5 transition-colors"
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-300 mb-1">接口Token</label>
+                                <label className="block text-sm font-medium text-gray-300 mb-1">接口凭证</label>
                                 <input
                                     type="text"
                                     name="token"
@@ -142,8 +142,8 @@ const MemberAdmin = () => {
                                 onChange={handleChange}
                                 className="w-full bg-gray-900 border border-gray-600 text-white text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2.5 transition-colors"
                             >
-                                <option value="remove">移除 (Remove)</option>
-                                <option value="ban">封禁 (Ban)</option>
+                                <option value="remove">移除</option>
+                                <option value="ban">封禁</option>
                             </select>
                         </div>
 
