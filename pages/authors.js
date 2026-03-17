@@ -15,7 +15,6 @@ const AuthorProfile = () => {
     const [activeTab, setActiveTab] = useState('global');
     const [filterSite, setFilterSite] = useState('all');
 
-    // 核心改造 1：引入缓存字典，点过的排行数据全部存在这里面
     const [rankingCache, setRankingCache] = useState({});
 
     useEffect(() => {
@@ -28,7 +27,6 @@ const AuthorProfile = () => {
             setSearchInput('');
             setData(null);
             
-            // 初次进入页面时，只有当 'global' 没被缓存过，才去请求全站总排行
             if (!rankingCache['global']) {
                 fetchRankingData('global');
             } else {
@@ -63,7 +61,6 @@ const AuthorProfile = () => {
         }
     };
 
-    // 核心改造 2：带有参数的动态获取函数
     const fetchRankingData = async (tabParam) => {
         setLoading(true);
         setError(null);
@@ -76,7 +73,6 @@ const AuthorProfile = () => {
                 throw new Error(result.details || result.error || '获取排行榜失败');
             }
             
-            // 将获取到的新数据塞进缓存字典里
             setRankingCache(prev => ({
                 ...prev,
                 [tabParam]: result.ranking
@@ -98,16 +94,13 @@ const AuthorProfile = () => {
         }
     };
 
-    // 核心改造 3：点击 Tab 时判断是否需要发请求
     const handleTabClick = (tabParam) => {
         setActiveTab(tabParam);
-        // 如果缓存里没有这个站的数据，才去后台拉取，否则直接秒切！
         if (!rankingCache[tabParam]) {
             fetchRankingData(tabParam);
         }
     };
 
-    // 取出当前选中 Tab 的数据
     const currentRankingList = rankingCache[activeTab] || [];
 
     const siteCounts = {};
@@ -179,7 +172,7 @@ const AuthorProfile = () => {
                         </div>
 
                         <div className="bg-gray-800/50 rounded-xl p-6 border border-white/10">
-                            <h3 className="text-xl font-semibold text-white mb-4 border-b border-gray-700 pb-2">全站数据总览 (Overview)</h3>
+                            <h3 className="text-xl font-semibold text-white mb-4 border-b border-gray-700 pb-2">全站数据总览</h3>
                             <p className="text-gray-300 leading-relaxed mb-6">
                                 <span className="font-semibold text-indigo-400">{data.name}</span> 在所有站点中全局排名 <span className="font-semibold text-white">#{data.globalRank}</span>。
                                 共计拥有 <span className="font-semibold text-white">{data.totalPages}</span> 个页面，
@@ -227,7 +220,7 @@ const AuthorProfile = () => {
                                         onChange={(e) => setFilterSite(e.target.value)}
                                         className="bg-gray-900 border border-gray-600 text-white text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2 outline-none cursor-pointer transition-colors"
                                     >
-                                        <option value="all">全站总览 (All Sites)</option>
+                                        <option value="all">全站总览</option>
                                         {Object.entries(siteCounts).map(([wikiId, count]) => {
                                             const siteConfig = config.SUPPORT_WIKI.find(w => w.WIKIT_ID === wikiId || w.URL.includes(wikiId));
                                             const siteName = siteConfig ? siteConfig.NAME : wikiId;
@@ -288,7 +281,6 @@ const AuthorProfile = () => {
                     </div>
                 )}
 
-                {/* 核心改造 4：无缝渲染排行榜的各个站点按钮 */}
                 {!name && !loading && (
                     <div className="space-y-6">
                         <div className="flex flex-wrap gap-4 border-b border-gray-700 pb-4">
