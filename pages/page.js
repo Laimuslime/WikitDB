@@ -278,9 +278,16 @@ const PageDetail = () => {
                     )}
 
                     {activeTab === '历史' && (
-                        <div className="bg-gray-900/50 p-4 rounded-lg overflow-x-auto border border-gray-700">
+                        <div className="bg-gray-900/50 p-0 rounded-lg overflow-x-auto border border-gray-700">
                             <div 
-                                className="prose prose-invert max-w-none text-sm prose-table:w-full prose-th:text-left prose-td:border-t prose-td:border-gray-700 prose-th:p-2 prose-td:p-2 prose-td:whitespace-nowrap break-normal prose-img:inline-block prose-img:w-5 prose-img:h-5 prose-img:rounded-full prose-img:m-0 prose-img:mr-1.5 prose-img:align-middle"
+                                className="w-full text-sm text-gray-300 
+                                [&_table]:w-full [&_table]:text-left [&_table]:border-collapse [&_table]:min-w-max
+                                [&_th]:p-4 [&_th]:font-medium [&_th]:text-gray-400 [&_th]:border-b [&_th]:border-gray-700 [&_th]:bg-gray-800/50
+                                [&_td]:p-4 [&_td]:border-b [&_td]:border-gray-700/50
+                                [&_tr:last-child_td]:border-b-0
+                                [&_tr:hover_td]:bg-gray-800/80 [&_tr]:transition-colors
+                                [&_img]:inline-block [&_img]:w-5 [&_img]:h-5 [&_img]:rounded-full [&_img]:mr-2 [&_img]:align-middle [&_img]:object-cover [&_img]:border [&_img]:border-gray-600
+                                [&_a]:text-indigo-400 [&_a:hover]:text-indigo-300 [&_a]:transition-colors"
                                 dangerouslySetInnerHTML={{ __html: data.historyHtml }}
                             />
                         </div>
