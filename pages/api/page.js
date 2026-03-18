@@ -304,6 +304,28 @@ export default async function handler(req, res) {
                 }
             }
 
+            const firstRowText = $hist('table.page-history tr').first().text().toLowerCase();
+            if (firstRowText.includes('actions') || firstRowText.includes('操作') || firstRowText.includes('rev.') || firstRowText.includes('by')) {
+                const colIndicesToRemove = [];
+                $hist('table.page-history tr').first().find('td, th').each((j, cell) => {
+                    const text = $hist(cell).text().replace(/\u00a0/g, '').trim().toLowerCase();
+                    if (text === 'actions' || text === '操作' || text === 'vs.' || text === 'vs' || text === '') {
+                        colIndicesToRemove.push(j);
+                    }
+                });
+
+                if (colIndicesToRemove.length > 0) {
+                    $hist('table.page-history tr').each((i, row) => {
+                        const cells = $hist(row).find('td, th');
+                        for (let k = colIndicesToRemove.length - 1; k >= 0; k--) {
+                            cells.eq(colIndicesToRemove[k]).remove();
+                        }
+                    });
+                }
+            }
+            
+            $hist('.buttons, .options, .page-history-options').remove();
+
             $hist('img').each((i, el) => {
                 const $img = $hist(el);
                 $img.removeAttr('style').removeAttr('width').removeAttr('height').removeAttr('class');
