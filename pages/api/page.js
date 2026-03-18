@@ -1,4 +1,6 @@
 import * as cheerio from 'cheerio';
+import fs from 'fs';
+import path from 'path';
 const config = require('../../wikitdb.config.js');
 
 export default async function handler(req, res) {
@@ -92,6 +94,42 @@ export default async function handler(req, res) {
             rating = gqlData.rating > 0 ? `+${gqlData.rating}` : gqlData.rating.toString();
         } else {
             rating = $('.rate-points').first().text().trim() || 'N/A';
+        }
+
+        let currentScoreNum = 0;
+        if (typeof rating === 'string' && rating !== 'N/A') {
+            currentScoreNum = parseInt(rating.replace('+', ''), 10);
+        } else if (typeof rating === 'number') {
+            currentScoreNum = rating;
+        }
+
+        let scoreHistory = [];
+        try {
+            const historyFilePath = path.join(process.cwd(), 'rating_history.json');
+            let historyData = {};
+            if (fs.existsSync(historyFilePath)) {
+                historyData = JSON.parse(fs.readFileSync(historyFilePath, 'utf-8'));
+            }
+            
+            const pageKey = `${actualWikiName}_${pageName}`;
+            if (!historyData[pageKey]) {
+                historyData[pageKey] = {};
+            }
+            
+            const now = new Date();
+            const cstTime = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+            const today = cstTime.toISOString().split('T')[0];
+            
+            historyData[pageKey][today] = currentScoreNum;
+            
+            fs.writeFileSync(historyFilePath, JSON.stringify(historyData, null, 2));
+            
+            scoreHistory = Object.keys(historyData[pageKey]).sort().map(date => ({
+                date: date,
+                score: historyData[pageKey][date]
+            }));
+        } catch (e) {
+            console.error('记录评分历史失败:', e);
         }
 
         let lastUpdated = gqlData?.lastmod;
@@ -369,7 +407,8 @@ export default async function handler(req, res) {
             sourceCode: sourceCode,
             historyHtml: historyHtml,
             pageId: pageId,
-            ratingTable: ratingTable
+            ratingTable: ratingTable,
+            scoreHistory: scoreHistory
         });
     } catch (error) {
         res.status(500).json({ error: '详情页抓取失败', details: error.message });
