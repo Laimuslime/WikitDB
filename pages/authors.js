@@ -393,7 +393,7 @@ const AuthorProfile = () => {
                                         onClick={() => router.push(`/authors?name=${encodeURIComponent(search)}`)}
                                         className="text-sm px-4 py-1.5 bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 rounded hover:bg-indigo-600/30 transition-colors"
                                     >
-                                        强制精确查找主页
+                                        强制精确查找作者
                                     </button>
                                 </div>
                             )}
