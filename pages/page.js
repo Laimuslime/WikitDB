@@ -15,32 +15,45 @@ const PageDetail = () => {
 
     const tabs = ['源码', '信息', '历史', '评分'];
 
-    const fetchPageData = async () => {
+    const fetchPageData = async (signal) => {
         if (!site || !page) return;
         setLoading(true);
         setError(null);
         
         try {
             const apiUrl = `/api/page?site=${site}&page=${encodeURIComponent(page)}`;
-            const res = await fetch(apiUrl);
+            const fetchOptions = signal ? { signal } : {};
+            const res = await fetch(apiUrl, fetchOptions);
             const result = await res.json();
             
             if (!res.ok) {
                 throw new Error(result.details || result.error || '请求失败');
             }
             
-            setData(result);
+            if (!signal || !signal.aborted) {
+                setData(result);
+            }
         } catch (err) {
-            setError(err.message);
+            if (err.name === 'AbortError') return;
+            if (!signal || !signal.aborted) {
+                setError(err.message);
+            }
         } finally {
-            setLoading(false);
+            if (!signal || !signal.aborted) {
+                setLoading(false);
+            }
         }
     };
 
     useEffect(() => {
-        if (router.isReady) {
-            fetchPageData();
-        }
+        if (!router.isReady) return;
+        
+        const controller = new AbortController();
+        fetchPageData(controller.signal);
+        
+        return () => {
+            controller.abort();
+        };
     }, [router.isReady, site, page]);
 
     if (loading) {
@@ -176,7 +189,7 @@ const PageDetail = () => {
                             <i className="fa-solid fa-arrow-up-right-from-square mr-1"></i> 在原站打开
                         </a>
                         <button 
-                            onClick={fetchPageData}
+                            onClick={() => fetchPageData()}
                             className="px-3 py-1.5 text-sm font-medium rounded-md bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors"
                         >
                             <i className="fa-solid fa-rotate-right mr-1"></i> 刷新页面
