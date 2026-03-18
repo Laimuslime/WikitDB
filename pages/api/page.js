@@ -32,7 +32,7 @@ export default async function handler(req, res) {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    query: `query { article(wiki: "${actualWikiName}", page: "${pageName}") { title rating upvotes downvotes author tags created_at lastmod page_id } }`
+                    query: `query { article(wiki: "${actualWikiName}", page: "${pageName}") { title rating upvotes downvotes comments author tags created_at lastmod page_id } }`
                 }),
                 cache: 'no-store'
             }),
@@ -149,6 +149,7 @@ export default async function handler(req, res) {
         }
 
         let sourceCode = '源码抓取失败：未能在原站网页中解析到 pageId。';
+        let ratingTable = [];
 
         if (pageId) {
             const origin = new URL(secureUrl).origin;
@@ -169,6 +170,12 @@ export default async function handler(req, res) {
                     method: 'POST',
                     headers: ajaxHeaders,
                     body: `page_id=${pageId}&moduleName=viewsource/ViewSourceModule&wikidot_token7=123456`,
+                    cache: 'no-store'
+                }),
+                fetch(ajaxUrl, {
+                    method: 'POST',
+                    headers: ajaxHeaders,
+                    body: `page_id=${pageId}&moduleName=pagerate/WhoRatedPageModule&wikidot_token7=123456`,
                     cache: 'no-store'
                 })
             ];
@@ -193,8 +200,6 @@ export default async function handler(req, res) {
                     if (data.status === 'ok') {
                         const $src = cheerio.load(data.body);
                         let rawHtml = $src('.page-source').html() || data.body || '';
-                        
-                        // 核心修复：仅剥离掉每一行最开头的连续空格/Tab，以及首尾的多余空行。绝不碰 HTML 标签。
                         sourceCode = rawHtml.replace(/^[ \t]+/gm, '').trim();
                     } else {
                         sourceCode = `请求源码失败，原站返回: ${data.status}`;
@@ -206,10 +211,39 @@ export default async function handler(req, res) {
                 sourceCode = `请求源码网络错误，可能被原站拦截`;
             }
 
-            let nativeHistorySuccess = false;
-            if (wikitHistoryFailed && results[1] && results[1].status === 'fulfilled' && results[1].value.ok) {
+            const rateRes = results[1];
+            if (rateRes && rateRes.status === 'fulfilled' && rateRes.value.ok) {
                 try {
-                    const data = await results[1].value.json();
+                    const data = await rateRes.value.json();
+                    if (data.status === 'ok' && data.body) {
+                        const $rate = cheerio.load(data.body);
+                        $rate('.printuser').each((i, el) => {
+                            const user = $rate(el).text().trim();
+                            let vote = '+1';
+                            const parentHtml = $rate(el).parent().text() || '';
+                            if (parentHtml.includes('-')) vote = '-1';
+                            else if (parentHtml.includes('+')) vote = '+1';
+
+                            const imgTag = $rate(el).find('img').attr('src');
+                            let avatar = '';
+                            if (imgTag) {
+                                avatar = imgTag.startsWith('http') ? imgTag : `https://www.wikidot.com${imgTag}`;
+                            } else {
+                                const accountStr = user.toLowerCase().replace(/_/g, '-').replace(/ /g, '-');
+                                avatar = `https://www.wikidot.com/avatar.php?account=${accountStr}`;
+                            }
+                            ratingTable.push({ user, avatar, vote });
+                        });
+                        ratingTable = ratingTable.filter((v, i, a) => a.findIndex(t => (t.user === v.user)) === i);
+                    }
+                } catch (e) {}
+            }
+
+            let nativeHistorySuccess = false;
+            const histResIndex = 2;
+            if (wikitHistoryFailed && results[histResIndex] && results[histResIndex].status === 'fulfilled' && results[histResIndex].value.ok) {
+                try {
+                    const data = await results[histResIndex].value.json();
                     if (data.status === 'ok') {
                         historyHtml = data.body;
                         nativeHistorySuccess = true;
@@ -293,10 +327,12 @@ export default async function handler(req, res) {
             rating: rating,
             upvotes: gqlData?.upvotes,
             downvotes: gqlData?.downvotes,
+            comments: gqlData?.comments,
             lastUpdated: lastUpdated,
             sourceCode: sourceCode,
             historyHtml: historyHtml,
-            pageId: pageId
+            pageId: pageId,
+            ratingTable: ratingTable
         });
     } catch (error) {
         res.status(500).json({ error: '详情页抓取失败', details: error.message });
