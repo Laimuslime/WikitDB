@@ -1,7 +1,7 @@
 const config = require('../../wikitdb.config.js');
 
 export default async function handler(req, res) {
-    const { site, q, p, type } = req.query;
+    const { site, q, p } = req.query;
 
     if (!site) return res.status(400).json({ error: '缺少 site 参数' });
 
@@ -19,19 +19,10 @@ export default async function handler(req, res) {
     const keyword = q ? q.trim() : '';
     const currentPage = parseInt(p, 10) || 1;
     const pageSize = 50;
-    const isAuthorSearch = type === 'author' && wikiConfig.AUTHOR_TAG;
 
     try {
-        let queryArgs = `wiki: ["${actualWikiName}"]`;
-        if (keyword) {
-            queryArgs += `, title: "%${keyword}%"`;
-        }
-        if (isAuthorSearch) {
-            queryArgs += `, includeTags: ["${wikiConfig.AUTHOR_TAG}"]`;
-        }
-        queryArgs += `, page: ${currentPage}, pageSize: ${pageSize}`;
-
-        const query = `query { articles(${queryArgs}) { nodes { title page wiki rating created_at tags } pageInfo { total } } }`;
+        const queryFilter = keyword ? `, title: "%${keyword}%"` : '';
+        const query = `query { articles(wiki: ["${actualWikiName}"]${queryFilter}, page: ${currentPage}, pageSize: ${pageSize}) { nodes { title page wiki rating created_at } pageInfo { total } } }`;
 
         const gqlRes = await fetch('https://wikit.unitreaty.org/apiv1/graphql', {
             method: 'POST',
@@ -62,14 +53,9 @@ export default async function handler(req, res) {
         });
 
     } catch (error) {
+        // 如果 GraphQL 原生检索语法报错，走兜底逻辑：在本地过滤和模拟翻页
         try {
-            let fallbackArgs = `wiki: ["${actualWikiName}"]`;
-            if (isAuthorSearch) {
-                fallbackArgs += `, includeTags: ["${wikiConfig.AUTHOR_TAG}"]`;
-            }
-            fallbackArgs += `, page: 1, pageSize: 2000`;
-
-            const fallbackQuery = `query { articles(${fallbackArgs}) { nodes { title page wiki rating created_at tags } } }`;
+            const fallbackQuery = `query { articles(wiki: ["${actualWikiName}"], page: 1, pageSize: 2000) { nodes { title page wiki rating created_at } } }`;
             const fallbackRes = await fetch('https://wikit.unitreaty.org/apiv1/graphql', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -88,15 +74,12 @@ export default async function handler(req, res) {
                 );
             }
 
-            if (isAuthorSearch) {
-                nodes = nodes.filter(n => n.tags && n.tags.includes(wikiConfig.AUTHOR_TAG));
-            }
-
             nodes.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
             
             const total = nodes.length;
             const totalPages = Math.ceil(total / pageSize);
             
+            // 数组切片模拟翻页
             const slicedNodes = nodes.slice((currentPage - 1) * pageSize, currentPage * pageSize);
             
             res.status(200).json({
