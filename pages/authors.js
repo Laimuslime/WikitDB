@@ -6,7 +6,7 @@ const config = require('../wikitdb.config.js');
 
 const AuthorProfile = () => {
     const router = useRouter();
-    const { name } = router.query;
+    const { name, search } = router.query;
 
     const [searchInput, setSearchInput] = useState('');
     const [data, setData] = useState(null);
@@ -24,16 +24,19 @@ const AuthorProfile = () => {
             setSearchInput(name);
             fetchAuthorData(name);
         } else {
-            setSearchInput('');
             setData(null);
             
-            if (!rankingCache['global']) {
-                fetchRankingData('global');
-            } else {
-                setActiveTab('global');
+            if (search) {
+                setSearchInput(search);
+            } else if (!search && !name) {
+                setSearchInput('');
+            }
+            
+            if (!rankingCache[activeTab]) {
+                fetchRankingData(activeTab);
             }
         }
-    }, [router.isReady, name]);
+    }, [router.isReady, name, search, activeTab]);
 
     const fetchAuthorData = async (authorName) => {
         setLoading(true);
@@ -77,7 +80,6 @@ const AuthorProfile = () => {
                 ...prev,
                 [tabParam]: result.ranking
             }));
-            setActiveTab(tabParam);
         } catch (err) {
             setError(err.message);
         } finally {
@@ -87,8 +89,9 @@ const AuthorProfile = () => {
 
     const handleSearch = (e) => {
         e.preventDefault();
-        if (searchInput.trim()) {
-            router.push(`/authors?name=${encodeURIComponent(searchInput.trim())}`, undefined, { shallow: true });
+        const query = searchInput.trim();
+        if (query) {
+            router.push(`/authors?search=${encodeURIComponent(query)}`, undefined, { shallow: true });
         } else {
             router.push(`/authors`, undefined, { shallow: true });
         }
@@ -96,12 +99,17 @@ const AuthorProfile = () => {
 
     const handleTabClick = (tabParam) => {
         setActiveTab(tabParam);
-        if (!rankingCache[tabParam]) {
-            fetchRankingData(tabParam);
-        }
     };
 
     const currentRankingList = rankingCache[activeTab] || [];
+    
+    let displayedRankingList = currentRankingList;
+    if (!name && search) {
+        const lowerSearch = search.toLowerCase();
+        displayedRankingList = currentRankingList.filter(author => 
+            author.name.toLowerCase().includes(lowerSearch)
+        );
+    }
 
     const siteCounts = {};
     if (data && data.pages) {
@@ -125,13 +133,13 @@ const AuthorProfile = () => {
             <div className="py-8">
                 <div className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-700 pb-6">
                     <h1 className="text-3xl font-bold text-white">
-                        {name ? '作者信息' : '作者评分排行榜'}
+                        {name ? '作者信息' : search ? '搜索结果' : '作者评分排行榜'}
                     </h1>
                     
                     <form onSubmit={handleSearch} className="relative w-full sm:w-80">
                         <input
                             type="text"
-                            placeholder="输入 Wikidot 用户名..."
+                            placeholder="输入 Wikidot 用户名模糊搜索..."
                             value={searchInput}
                             onChange={(e) => setSearchInput(e.target.value)}
                             className="w-full bg-gray-900 border border-gray-600 text-white text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2.5 placeholder-gray-500 transition-colors"
@@ -310,19 +318,25 @@ const AuthorProfile = () => {
                             ))}
                         </div>
 
+                        {search && (
+                            <div className="text-sm text-gray-400">
+                                正在当前排行榜中为您模糊匹配包含 <span className="text-indigo-400 font-bold">{search}</span> 的作者：
+                            </div>
+                        )}
+
                         <div className="bg-gray-800/50 rounded-xl border border-white/10 overflow-hidden">
                             <div className="overflow-x-auto">
                                 <table className="w-full text-left border-collapse">
                                     <thead>
                                         <tr className="bg-gray-900/50 border-b border-gray-700 text-gray-400 text-sm">
-                                            <th className="p-4 font-medium w-24">排名</th>
+                                            <th className="p-4 font-medium w-24">原排名</th>
                                             <th className="p-4 font-medium">作者</th>
                                             <th className="p-4 font-medium text-right">总评分</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {currentRankingList && currentRankingList.length > 0 ? (
-                                            currentRankingList.map((author, index) => (
+                                        {displayedRankingList && displayedRankingList.length > 0 ? (
+                                            displayedRankingList.map((author, index) => (
                                                 <tr key={index} className="border-b border-gray-700/50 hover:bg-gray-700/20 transition-colors">
                                                     <td className="p-4">
                                                         <span className={`inline-flex items-center justify-center w-8 h-8 rounded-full font-bold text-sm ${
@@ -349,14 +363,40 @@ const AuthorProfile = () => {
                                             ))
                                         ) : (
                                             <tr>
-                                                <td colSpan="3" className="p-8 text-center text-gray-500">
-                                                    暂无排行数据或尚未加载完毕
+                                                <td colSpan="3" className="p-12 text-center">
+                                                    {search ? (
+                                                        <div className="flex flex-col items-center justify-center space-y-3">
+                                                            <div className="text-gray-400">
+                                                                当前排行榜中未找到包含 <span className="text-white font-bold">{search}</span> 的活跃作者。
+                                                            </div>
+                                                            <button 
+                                                                onClick={() => router.push(`/authors?name=${encodeURIComponent(search)}`)}
+                                                                className="mt-4 px-6 py-2.5 bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 rounded-lg hover:bg-indigo-600/30 transition-colors font-medium"
+                                                            >
+                                                                强制精确查找该作者主页
+                                                            </button>
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-gray-500">暂无排行数据或尚未加载完毕</span>
+                                                    )}
                                                 </td>
                                             </tr>
                                         )}
                                     </tbody>
                                 </table>
                             </div>
+                            
+                            {search && displayedRankingList.length > 0 && (
+                                <div className="p-4 bg-gray-900/50 border-t border-gray-700 flex flex-col sm:flex-row items-center justify-center gap-3">
+                                    <span className="text-sm text-gray-400">以上是没有你想找的作者？</span>
+                                    <button 
+                                        onClick={() => router.push(`/authors?name=${encodeURIComponent(search)}`)}
+                                        className="text-sm px-4 py-1.5 bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 rounded hover:bg-indigo-600/30 transition-colors"
+                                    >
+                                        强制精确查找主页
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     </div>
                 )}
