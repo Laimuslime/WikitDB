@@ -1,6 +1,11 @@
 import * as cheerio from 'cheerio';
-import { kv } from '@vercel/kv';
+import { Redis } from '@upstash/redis';
 const config = require('../../wikitdb.config.js');
+
+const redis = new Redis({
+  url: process.env.KV_REST_API_URL || '',
+  token: process.env.KV_REST_API_TOKEN || '',
+});
 
 export default async function handler(req, res) {
     const { site, page } = req.query;
@@ -105,7 +110,7 @@ export default async function handler(req, res) {
         let scoreHistory = [];
         try {
             const pageKey = `rating_history_${actualWikiName}_${pageName}`;
-            let historyData = await kv.get(pageKey) || {};
+            let historyData = await redis.get(pageKey) || {};
             
             const now = new Date();
             const cstTime = new Date(now.getTime() + 8 * 60 * 60 * 1000);
@@ -113,7 +118,7 @@ export default async function handler(req, res) {
             
             historyData[today] = currentScoreNum;
             
-            await kv.set(pageKey, historyData);
+            await redis.set(pageKey, historyData);
             
             scoreHistory = Object.keys(historyData).sort().map(date => ({
                 date: date,
