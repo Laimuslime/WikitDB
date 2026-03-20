@@ -102,59 +102,45 @@ const PageDetail = () => {
             date: item.date
         }));
         
-        // 插入初始记录点，用于绘制灰色虚线
         if (chartData.length >= 1 && chartData[0].date !== '初始记录') {
             chartData.unshift({ score: chartData[0].score, date: '初始记录' });
         }
     }
 
-    // 动态判断正负分主题
     const isNegative = chartData.length > 0 && chartData[chartData.length - 1].score < 0;
     const themeColor = isNegative ? 'rgba(248, 113, 113, 1)' : 'rgba(129, 140, 248, 1)';
+    const bgColorFallback = isNegative ? 'rgba(248, 113, 113, 0.2)' : 'rgba(129, 140, 248, 0.2)';
     const grayColor = 'rgba(107, 114, 128, 1)';
 
     const lineChartData = {
         labels: chartData.map(d => d.date),
         datasets: [
             {
-                fill: 'origin', // 严格填充到 0 分线
+                fill: 'origin',
                 label: '页面评分',
                 data: chartData.map(d => d.score),
                 borderColor: themeColor,
                 backgroundColor: (context) => {
                     const chart = context.chart;
-                    const { ctx, chartArea, scales } = chart;
-                    if (!chartArea) return 'rgba(0,0,0,0)';
-                    
-                    const zeroY = scales.y.getPixelForValue(0);
+                    const { ctx, chartArea } = chart;
+                    if (!chartArea) return bgColorFallback;
                     const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
-                    
-                    const zeroRatio = (zeroY - chartArea.top) / (chartArea.bottom - chartArea.top);
-                    const safeZero = Math.max(0, Math.min(1, zeroRatio));
-
-                    if (isNegative) {
-                        // 负分填充逻辑：0分线处透明，向下到折线处不透明红色
-                        gradient.addColorStop(safeZero, 'rgba(248, 113, 113, 0)');
-                        gradient.addColorStop(1, 'rgba(248, 113, 113, 0.4)');
-                    } else {
-                        // 正分填充逻辑：顶部折线处不透明蓝色，向下到0分线处透明
-                        gradient.addColorStop(0, 'rgba(129, 140, 248, 0.4)');
-                        gradient.addColorStop(safeZero, 'rgba(129, 140, 248, 0)');
-                    }
+                    gradient.addColorStop(0, isNegative ? 'rgba(248, 113, 113, 0.5)' : 'rgba(129, 140, 248, 0.5)');
+                    gradient.addColorStop(1, isNegative ? 'rgba(248, 113, 113, 0)' : 'rgba(129, 140, 248, 0)');
                     return gradient;
                 },
                 borderWidth: 3,
                 
-                // 核心恢复：改回“先向上然后再长”的阶梯走势
-                stepped: 'before',
+                // 彻底去掉平滑曲线和阶梯，回归最自然的点到点直连
                 tension: 0,
                 
-                // 保留第一段的灰色虚线（记录前的数据）
+                // 初始记录线段变为灰色虚线
                 segment: {
                     borderColor: ctx => ctx.p0DataIndex === 0 ? grayColor : themeColor,
                     borderDash: ctx => ctx.p0DataIndex === 0 ? [6, 6] : undefined,
                 },
                 
+                // 初始记录的点变为灰色
                 pointBackgroundColor: (ctx) => ctx.dataIndex === 0 ? grayColor : themeColor,
                 pointBorderColor: '#1F2937',
                 pointBorderWidth: 1.5,
@@ -168,22 +154,23 @@ const PageDetail = () => {
         responsive: true,
         maintainAspectRatio: false,
         layout: {
-            padding: { top: 20, bottom: 20, left: 10, right: 20 }
+            padding: {
+                top: 20,
+                bottom: 20,
+                left: 10,
+                right: 20
+            }
         },
         scales: {
             y: {
-                // 强制 Y 轴永远包含 0，防止负分阴影渲染断层
-                suggestedMin: 0,
-                suggestedMax: 0,
                 ticks: {
-                    precision: 0, // 强制整数，消灭 1.5 分
-                    stepSize: 10, // 强制 10 分一档
+                    precision: 0, 
                     color: '#9CA3AF',
                     font: { size: 12 }
                 },
                 grid: {
-                    color: (ctx) => ctx.tick.value === 0 ? '#4B5563' : '#374151',
-                    borderDash: (ctx) => ctx.tick.value === 0 ? [6, 6] : [4, 4],
+                    color: (context) => context.tick.value === 0 ? '#4B5563' : '#374151',
+                    borderDash: (context) => context.tick.value === 0 ? [6, 6] : [4, 4],
                     drawBorder: false,
                 }
             },
