@@ -87,7 +87,6 @@ const PageDetail = () => {
     const maxScore = chartData.length > 0 ? Math.max(...chartData.map(d => d.score)) : 0;
     const minScore = chartData.length > 0 ? Math.min(...chartData.map(d => d.score)) : 0;
     
-    // 强制按照 10 分一档计算
     const gridMin = Math.floor(Math.min(minScore, 0) / 10) * 10;
     const gridMax = Math.ceil(Math.max(maxScore, 0) / 10) * 10;
     const rangeY = Math.max(gridMax - gridMin, 1);
@@ -100,9 +99,7 @@ const PageDetail = () => {
     const scaleY = (svgHeight - padY * 2) / rangeY;
     
     const getY = (val) => svgHeight - padY - (val - gridMin) * scaleY;
-    const zeroY = getY(0);
     
-    // 动态判断是否为负分走势，用于切换红色/蓝色主题
     const isNegative = chartData.length > 0 && chartData[chartData.length - 1].score < 0;
     const themeColor = isNegative ? '#F87171' : '#818CF8';
     const shadowClass = isNegative 
@@ -114,34 +111,18 @@ const PageDetail = () => {
         gridLines.push(i);
     }
 
-    // 绘制阶梯线 (先横向走，再纵向跳)
-    const createStepPath = () => {
+    // 纯粹的直连线条
+    const createLinePath = () => {
         if (chartData.length === 0) return '';
         let path = `M ${padX},${getY(chartData[0].score)}`;
         for (let i = 1; i < chartData.length; i++) {
-            const nextX = padX + i * scaleX;
-            const prevY = getY(chartData[i - 1].score);
-            const nextY = getY(chartData[i].score);
-            path += ` L ${nextX},${prevY} L ${nextX},${nextY}`;
+            const x = padX + i * scaleX;
+            const y = getY(chartData[i].score);
+            path += ` L ${x},${y}`;
         }
         return path;
     };
-    const stepPathD = createStepPath();
-
-    // 绘制填充面积（严格闭合到 0 分线）
-    const createStepAreaPath = () => {
-        if (chartData.length === 0) return '';
-        let path = `M ${padX},${zeroY} L ${padX},${getY(chartData[0].score)}`;
-        for (let i = 1; i < chartData.length; i++) {
-            const nextX = padX + i * scaleX;
-            const prevY = getY(chartData[i - 1].score);
-            const nextY = getY(chartData[i].score);
-            path += ` L ${nextX},${prevY} L ${nextX},${nextY}`;
-        }
-        path += ` L ${padX + (chartData.length - 1) * scaleX},${zeroY} Z`;
-        return path;
-    };
-    const areaPathD = createStepAreaPath();
+    const linePathD = createLinePath();
 
     return (
         <>
@@ -348,13 +329,6 @@ const PageDetail = () => {
                                         </h3>
                                         <div className="min-w-[600px] relative">
                                             <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} className="w-full h-auto drop-shadow-lg overflow-visible">
-                                                <defs>
-                                                    <linearGradient id="areaGradient" x1="0" y1={isNegative ? "1" : "0"} x2="0" y2={isNegative ? "0" : "1"}>
-                                                        <stop offset="0%" stopColor={themeColor} stopOpacity="0.5" />
-                                                        <stop offset="100%" stopColor={themeColor} stopOpacity="0" />
-                                                    </linearGradient>
-                                                </defs>
-
                                                 {gridLines.map((val) => {
                                                     const y = getY(val);
                                                     const isZero = val === 0;
@@ -367,13 +341,7 @@ const PageDetail = () => {
                                                 })}
 
                                                 <path
-                                                    d={areaPathD}
-                                                    fill="url(#areaGradient)"
-                                                    className="transition-all duration-300"
-                                                />
-
-                                                <path
-                                                    d={stepPathD}
+                                                    d={linePathD}
                                                     fill="none"
                                                     stroke={themeColor} 
                                                     strokeWidth="3"
