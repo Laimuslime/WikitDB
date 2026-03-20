@@ -86,7 +86,10 @@ const PageDetail = () => {
 
     const maxScore = chartData.length > 0 ? Math.max(...chartData.map(d => d.score)) : 0;
     const minScore = chartData.length > 0 ? Math.min(...chartData.map(d => d.score)) : 0;
-    const rangeY = Math.max(maxScore - minScore, 1);
+    
+    const gridMin = Math.floor(Math.min(minScore, 0) / 10) * 10;
+    const gridMax = Math.ceil(Math.max(maxScore, 0) / 10) * 10;
+    const rangeY = Math.max(gridMax - gridMin, 1);
     
     const svgWidth = 800;
     const svgHeight = 240;
@@ -94,30 +97,39 @@ const PageDetail = () => {
     const padY = 40;
     const scaleX = chartData.length > 1 ? (svgWidth - padX * 2) / (chartData.length - 1) : 1;
     const scaleY = (svgHeight - padY * 2) / rangeY;
-    const zeroY = svgHeight - padY - (0 - minScore) * scaleY;
+    
+    const getY = (val) => svgHeight - padY - (val - gridMin) * scaleY;
+    
+    const gridLines = [];
+    for (let i = gridMin; i <= gridMax; i += 10) {
+        gridLines.push(i);
+    }
 
-    const createLinePath = () => {
+    const createStepPath = () => {
         if (chartData.length === 0) return '';
-        let path = `M ${padX},${svgHeight - padY - (chartData[0].score - minScore) * scaleY}`;
+        let path = `M ${padX},${getY(chartData[0].score)}`;
         for (let i = 1; i < chartData.length; i++) {
-            const x = padX + i * scaleX;
-            const y = svgHeight - padY - (chartData[i].score - minScore) * scaleY;
-            path += ` L ${x},${y}`;
+            const nextX = padX + i * scaleX;
+            const prevY = getY(chartData[i - 1].score);
+            const nextY = getY(chartData[i].score);
+            path += ` L ${nextX},${prevY} L ${nextX},${nextY}`;
         }
         return path;
     };
-    const linePathD = createLinePath();
+    const stepPathD = createStepPath();
 
     const createAreaPath = () => {
         if (chartData.length === 0) return '';
-        let path = `M ${padX},${svgHeight - padY} `;
-        path += `L ${padX},${svgHeight - padY - (chartData[0].score - minScore) * scaleY} `;
+        const baseY = svgHeight - padY;
+        let path = `M ${padX},${baseY} `;
+        path += `L ${padX},${getY(chartData[0].score)} `;
         for (let i = 1; i < chartData.length; i++) {
-            const x = padX + i * scaleX;
-            const y = svgHeight - padY - (chartData[i].score - minScore) * scaleY;
-            path += `L ${x},${y} `;
+            const nextX = padX + i * scaleX;
+            const prevY = getY(chartData[i - 1].score);
+            const nextY = getY(chartData[i].score);
+            path += `L ${nextX},${prevY} L ${nextX},${nextY} `;
         }
-        path += `L ${padX + (chartData.length - 1) * scaleX},${svgHeight - padY} Z`;
+        path += `L ${padX + (chartData.length - 1) * scaleX},${baseY} Z`;
         return path;
     };
     const areaPathD = createAreaPath();
@@ -334,21 +346,16 @@ const PageDetail = () => {
                                                     </linearGradient>
                                                 </defs>
 
-                                                <line x1={padX} y1={zeroY} x2={svgWidth - padX} y2={zeroY} stroke="#4B5563" strokeWidth="1.5" strokeDasharray="6" />
-                                                <text x={padX - 10} y={zeroY + 4} fontSize="12" fill="#9CA3AF" textAnchor="end">0</text>
-
-                                                {maxScore !== 0 && (
-                                                    <g>
-                                                        <line x1={padX} y1={svgHeight - padY - (maxScore - minScore) * scaleY} x2={svgWidth - padX} y2={svgHeight - padY - (maxScore - minScore) * scaleY} stroke="#374151" strokeWidth="1" strokeDasharray="4" />
-                                                        <text x={padX - 10} y={svgHeight - padY - (maxScore - minScore) * scaleY + 4} fontSize="12" fill="#9CA3AF" textAnchor="end">{maxScore}</text>
-                                                    </g>
-                                                )}
-                                                {minScore !== 0 && (
-                                                    <g>
-                                                        <line x1={padX} y1={svgHeight - padY} x2={svgWidth - padX} y2={svgHeight - padY} stroke="#374151" strokeWidth="1" strokeDasharray="4" />
-                                                        <text x={padX - 10} y={svgHeight - padY + 4} fontSize="12" fill="#9CA3AF" textAnchor="end">{minScore}</text>
-                                                    </g>
-                                                )}
+                                                {gridLines.map((val) => {
+                                                    const y = getY(val);
+                                                    const isZero = val === 0;
+                                                    return (
+                                                        <g key={val}>
+                                                            <line x1={padX} y1={y} x2={svgWidth - padX} y2={y} stroke={isZero ? "#4B5563" : "#374151"} strokeWidth={isZero ? "1.5" : "1"} strokeDasharray={isZero ? "6" : "4"} />
+                                                            <text x={padX - 10} y={y + 4} fontSize="12" fill={isZero ? "#D1D5DB" : "#9CA3AF"} textAnchor="end">{val}</text>
+                                                        </g>
+                                                    );
+                                                })}
 
                                                 <path
                                                     d={areaPathD}
@@ -357,7 +364,7 @@ const PageDetail = () => {
                                                 />
 
                                                 <path
-                                                    d={linePathD}
+                                                    d={stepPathD}
                                                     fill="none"
                                                     stroke="#818CF8" 
                                                     strokeWidth="3"
@@ -368,7 +375,7 @@ const PageDetail = () => {
                                                 
                                                 {chartData.map((d, i) => {
                                                     const x = padX + i * scaleX;
-                                                    const y = svgHeight - padY - (d.score - minScore) * scaleY;
+                                                    const y = getY(d.score);
                                                     return (
                                                         <g key={i} className="group cursor-pointer">
                                                             <circle 
