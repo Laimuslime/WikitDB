@@ -2,7 +2,32 @@ import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Filler,
+  Legend,
+} from 'chart.js';
+import { Line } from 'react-chartjs-2';
+
 const config = require('../wikitdb.config.js');
+
+// 注册 Chart.js 组件
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Filler,
+  Legend
+);
 
 const PageDetail = () => {
     const router = useRouter();
@@ -71,75 +96,104 @@ const PageDetail = () => {
 
     if (!data) return null;
 
+    // 整理 Chart.js 需要的数据格式
     let chartData = [];
     if (data.scoreHistory && data.scoreHistory.length > 0) {
-        chartData = data.scoreHistory.map((item, idx) => ({
-            index: idx,
+        chartData = data.scoreHistory.map((item) => ({
             score: item.score,
             date: item.date
         }));
         
         if (chartData.length === 1) {
-            chartData.unshift({ index: -1, score: chartData[0].score, date: '初始记录' });
+            chartData.unshift({ score: chartData[0].score, date: '初始记录' });
         }
     }
 
-    const maxScore = chartData.length > 0 ? Math.max(...chartData.map(d => d.score)) : 0;
-    const minScore = chartData.length > 0 ? Math.min(...chartData.map(d => d.score)) : 0;
-    
-    // 强制按 10 分一档计算刻度
-    const gridMin = Math.floor(Math.min(minScore, 0) / 10) * 10;
-    const gridMax = Math.ceil(Math.max(maxScore, 0) / 10) * 10;
-    const rangeY = Math.max(gridMax - gridMin, 1);
-    
-    const svgWidth = 800;
-    const svgHeight = 240;
-    const padX = 40;
-    const padY = 40;
-    const scaleX = chartData.length > 1 ? (svgWidth - padX * 2) / (chartData.length - 1) : 1;
-    const scaleY = (svgHeight - padY * 2) / rangeY;
-    
-    const getY = (val) => svgHeight - padY - (val - gridMin) * scaleY;
-    const zeroY = getY(0);
-    
-    // 动态判断是否为负分走势，用于切换红色/蓝色主题
+    // 判断当前是否为负分走势，设置对应的主题色
     const isNegative = chartData.length > 0 && chartData[chartData.length - 1].score < 0;
-    const themeColor = isNegative ? '#F87171' : '#818CF8';
-    const shadowClass = isNegative 
-        ? 'drop-shadow-[0_0_8px_rgba(248,113,113,0.5)]' 
-        : 'drop-shadow-[0_0_8px_rgba(129,140,248,0.5)]';
-    
-    const gridLines = [];
-    for (let i = gridMin; i <= gridMax; i += 10) {
-        gridLines.push(i);
-    }
+    const themeColor = isNegative ? 'rgba(248, 113, 113, 1)' : 'rgba(129, 140, 248, 1)'; // 红色或蓝色
+    const bgColor = isNegative ? 'rgba(248, 113, 113, 0.2)' : 'rgba(129, 140, 248, 0.2)';
 
-    // 最标准的直连折线 (点到点直接相连，真实反映每日涨跌幅度)
-    const createLinePath = () => {
-        if (chartData.length === 0) return '';
-        let path = `M ${padX},${getY(chartData[0].score)}`;
-        for (let i = 1; i < chartData.length; i++) {
-            const x = padX + i * scaleX;
-            const y = getY(chartData[i].score);
-            path += ` L ${x},${y}`;
-        }
-        return path;
+    const lineChartData = {
+        labels: chartData.map(d => d.date),
+        datasets: [
+            {
+                fill: 'origin', // 严格填充至 0 分线（X轴）
+                label: '页面评分',
+                data: chartData.map(d => d.score),
+                borderColor: themeColor,
+                backgroundColor: bgColor,
+                borderWidth: 3,
+                tension: 0, // 0 表示点到点直线相连，没有自作主张的曲线
+                pointBackgroundColor: themeColor,
+                pointBorderColor: '#1F2937',
+                pointBorderWidth: 1.5,
+                pointRadius: 4,
+                pointHoverRadius: 6,
+            }
+        ]
     };
-    const linePathD = createLinePath();
 
-    // 匹配直连折线的面积填充 (严格向0分线闭合)
-    const createAreaPath = () => {
-        if (chartData.length === 0) return '';
-        let path = `M ${padX},${zeroY} L ${padX},${getY(chartData[0].score)}`;
-        for (let i = 1; i < chartData.length; i++) {
-            const x = padX + i * scaleX;
-            const y = getY(chartData[i].score);
-            path += ` L ${x},${y}`;
-        }
-        path += ` L ${padX + (chartData.length - 1) * scaleX},${zeroY} Z`;
-        return path;
+    const lineChartOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+        layout: {
+            padding: {
+                top: 20,
+                bottom: 20,
+                left: 10,
+                right: 20
+            }
+        },
+        scales: {
+            y: {
+                ticks: {
+                    stepSize: 10, // 强制 10 分一档
+                    color: '#9CA3AF',
+                    font: { size: 12 }
+                },
+                grid: {
+                    color: (context) => context.tick.value === 0 ? '#4B5563' : '#374151',
+                    borderDash: (context) => context.tick.value === 0 ? [6, 6] : [4, 4],
+                    drawBorder: false,
+                }
+            },
+            x: {
+                ticks: {
+                    color: '#9CA3AF',
+                    maxTicksLimit: 8, // 防止日期文字过多重叠
+                    font: { size: 10 }
+                },
+                grid: {
+                    display: false // 隐藏垂直网格线，使其更整洁
+                }
+            }
+        },
+        plugins: {
+            legend: {
+                display: false // 隐藏顶部图例
+            },
+            tooltip: {
+                backgroundColor: '#111827',
+                titleColor: '#9CA3AF',
+                bodyColor: '#E5E7EB',
+                borderColor: '#374151',
+                borderWidth: 1,
+                padding: 10,
+                displayColors: false, // 隐藏 Tooltip 里的小方块色标
+                callbacks: {
+                    label: function(context) {
+                        let val = context.parsed.y;
+                        return val > 0 ? `+${val}` : `${val}`;
+                    }
+                }
+            }
+        },
+        interaction: {
+            intersect: false,
+            mode: 'index',
+        },
     };
-    const areaPathD = createAreaPath();
 
     return (
         <>
@@ -339,77 +393,15 @@ const PageDetail = () => {
                     {activeTab === '评分' && (
                         <div className="space-y-6">
                             {chartData.length > 1 ? (
-                                <>
-                                    <div className="w-full overflow-x-auto bg-gray-900/50 p-6 rounded-lg border border-gray-700">
-                                        <h3 className="text-lg font-medium text-white mb-6 flex items-center gap-2">
-                                            <i className="fa-solid fa-chart-line text-indigo-400"></i> 按日评分走势
-                                        </h3>
-                                        <div className="min-w-[600px] relative">
-                                            <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} className="w-full h-auto drop-shadow-lg overflow-visible">
-                                                <defs>
-                                                    <linearGradient id="areaGradient" x1="0" y1={isNegative ? "1" : "0"} x2="0" y2={isNegative ? "0" : "1"}>
-                                                        <stop offset="0%" stopColor={themeColor} stopOpacity="0.5" />
-                                                        <stop offset="100%" stopColor={themeColor} stopOpacity="0" />
-                                                    </linearGradient>
-                                                </defs>
-
-                                                {gridLines.map((val) => {
-                                                    const y = getY(val);
-                                                    const isZero = val === 0;
-                                                    return (
-                                                        <g key={val}>
-                                                            <line x1={padX} y1={y} x2={svgWidth - padX} y2={y} stroke={isZero ? "#4B5563" : "#374151"} strokeWidth={isZero ? "1.5" : "1"} strokeDasharray={isZero ? "6" : "4"} />
-                                                            <text x={padX - 10} y={y + 4} fontSize="12" fill={isZero ? "#D1D5DB" : "#9CA3AF"} textAnchor="end">{val}</text>
-                                                        </g>
-                                                    );
-                                                })}
-
-                                                <path
-                                                    d={areaPathD}
-                                                    fill="url(#areaGradient)"
-                                                    className="transition-all duration-300"
-                                                />
-
-                                                <path
-                                                    d={linePathD}
-                                                    fill="none"
-                                                    stroke={themeColor} 
-                                                    strokeWidth="3"
-                                                    strokeLinecap="round"
-                                                    strokeLinejoin="round"
-                                                    className={shadowClass}
-                                                />
-                                                
-                                                {chartData.map((d, i) => {
-                                                    const x = padX + i * scaleX;
-                                                    const y = getY(d.score);
-                                                    return (
-                                                        <g key={i} className="group cursor-pointer">
-                                                            <circle 
-                                                                cx={x} 
-                                                                cy={y} 
-                                                                r="4" 
-                                                                fill={themeColor}
-                                                                stroke="#1F2937"
-                                                                strokeWidth="1.5"
-                                                                className="transition-all duration-200 group-hover:r-[6px]" 
-                                                            />
-                                                            <g className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
-                                                                <rect x={x - 45} y={y - 50} width="90" height="36" rx="4" fill="#111827" stroke="#374151" strokeWidth="1" />
-                                                                <text x={x} y={y - 30} fontSize="12" fill="#E5E7EB" textAnchor="middle" fontWeight="bold">
-                                                                    {d.score > 0 ? `+${d.score}` : d.score}
-                                                                </text>
-                                                                <text x={x} y={y - 18} fontSize="10" fill="#9CA3AF" textAnchor="middle">
-                                                                    {d.date}
-                                                                </text>
-                                                            </g>
-                                                        </g>
-                                                    );
-                                                })}
-                                            </svg>
-                                        </div>
+                                <div className="w-full bg-gray-900/50 p-6 rounded-lg border border-gray-700">
+                                    <h3 className="text-lg font-medium text-white mb-6 flex items-center gap-2">
+                                        <i className="fa-solid fa-chart-line text-indigo-400"></i> 按日评分走势
+                                    </h3>
+                                    {/* 这里是将原生 SVG 替换为 Chart.js 组件的地方 */}
+                                    <div className="w-full h-[320px] relative">
+                                        <Line data={lineChartData} options={lineChartOptions} />
                                     </div>
-                                </>
+                                </div>
                             ) : (
                                 <div className="text-center py-10 text-gray-400 bg-gray-900/50 rounded-lg border border-gray-700">
                                     开始记录数据... 明日即可生成走势曲线。
