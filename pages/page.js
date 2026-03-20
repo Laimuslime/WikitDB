@@ -108,6 +108,20 @@ const PageDetail = () => {
     };
     const linePathD = createLinePath();
 
+    const createAreaPath = () => {
+        if (chartData.length === 0) return '';
+        let path = `M ${padX},${svgHeight - padY} `;
+        path += `L ${padX},${svgHeight - padY - (chartData[0].score - minScore) * scaleY} `;
+        for (let i = 1; i < chartData.length; i++) {
+            const x = padX + i * scaleX;
+            const y = svgHeight - padY - (chartData[i].score - minScore) * scaleY;
+            path += `L ${x},${y} `;
+        }
+        path += `L ${padX + (chartData.length - 1) * scaleX},${svgHeight - padY} Z`;
+        return path;
+    };
+    const areaPathD = createAreaPath();
+
     return (
         <>
             <Head>
@@ -313,6 +327,13 @@ const PageDetail = () => {
                                         </h3>
                                         <div className="min-w-[600px] relative">
                                             <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} className="w-full h-auto drop-shadow-lg overflow-visible">
+                                                <defs>
+                                                    <linearGradient id="scoreGradient" x1="0" y1="0" x2="0" y2="1">
+                                                        <stop offset="0%" stopColor="#818CF8" stopOpacity="0.5" />
+                                                        <stop offset="100%" stopColor="#818CF8" stopOpacity="0" />
+                                                    </linearGradient>
+                                                </defs>
+
                                                 <line x1={padX} y1={zeroY} x2={svgWidth - padX} y2={zeroY} stroke="#4B5563" strokeWidth="1.5" strokeDasharray="6" />
                                                 <text x={padX - 10} y={zeroY + 4} fontSize="12" fill="#9CA3AF" textAnchor="end">0</text>
 
@@ -328,6 +349,12 @@ const PageDetail = () => {
                                                         <text x={padX - 10} y={svgHeight - padY + 4} fontSize="12" fill="#9CA3AF" textAnchor="end">{minScore}</text>
                                                     </g>
                                                 )}
+
+                                                <path
+                                                    d={areaPathD}
+                                                    fill="url(#scoreGradient)"
+                                                    className="transition-all duration-300"
+                                                />
 
                                                 <path
                                                     d={linePathD}
