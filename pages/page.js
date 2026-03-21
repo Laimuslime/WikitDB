@@ -122,11 +122,24 @@ const PageDetail = () => {
                 borderColor: themeColor,
                 backgroundColor: (context) => {
                     const chart = context.chart;
-                    const { ctx, chartArea } = chart;
+                    const { ctx, chartArea, scales } = chart;
                     if (!chartArea) return bgColorFallback;
+                    
+                    const zeroY = scales.y.getPixelForValue(0);
+                    const zeroRatio = (zeroY - chartArea.top) / (chartArea.bottom - chartArea.top);
+                    const safeZero = Math.max(0, Math.min(1, zeroRatio));
+                    
                     const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
-                    gradient.addColorStop(0, isNegative ? 'rgba(248, 113, 113, 0.5)' : 'rgba(129, 140, 248, 0.5)');
-                    gradient.addColorStop(1, isNegative ? 'rgba(248, 113, 113, 0)' : 'rgba(129, 140, 248, 0)');
+                    
+                    if (isNegative) {
+                        // 负分：0分线（透明）向下到底部（红色）
+                        gradient.addColorStop(safeZero, 'rgba(248, 113, 113, 0)');
+                        gradient.addColorStop(1, 'rgba(248, 113, 113, 0.5)');
+                    } else {
+                        // 正分：顶部（蓝色）向下到0分线（透明）
+                        gradient.addColorStop(0, 'rgba(129, 140, 248, 0.5)');
+                        gradient.addColorStop(safeZero, 'rgba(129, 140, 248, 0)');
+                    }
                     return gradient;
                 },
                 borderWidth: 3,
@@ -163,6 +176,9 @@ const PageDetail = () => {
         },
         scales: {
             y: {
+                // 强制包含 0 分线，确保纯负分或纯正分走势阴影不断层
+                suggestedMax: 0,
+                suggestedMin: 0,
                 ticks: {
                     precision: 0, 
                     color: '#9CA3AF',
