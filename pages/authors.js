@@ -388,12 +388,12 @@ const AuthorProfile = () => {
                             
                             {search && displayedRankingList.length > 0 && (
                                 <div className="p-4 bg-gray-900/50 border-t border-gray-700 flex flex-col sm:flex-row items-center justify-center gap-3">
-                                    <span className="text-sm text-gray-400">以上是没有你想找的作者？</span>
+                                    <span className="text-sm text-gray-400">以上没有你想找的作者？</span>
                                     <button 
                                         onClick={() => router.push(`/authors?name=${encodeURIComponent(search)}`)}
                                         className="text-sm px-4 py-1.5 bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 rounded hover:bg-indigo-600/30 transition-colors"
                                     >
-                                        强制精确查找作者
+                                        精确查找作者
                                     </button>
                                 </div>
                             )}
