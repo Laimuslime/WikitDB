@@ -17,22 +17,36 @@ const DeleteAnnouncement = () => {
 
     const [generatedCode, setGeneratedCode] = useState('');
 
-    const formatValidDate = (dateStr) => {
-        if (!dateStr) return '未知时间';
-        const d = new Date(dateStr);
+    const formatValidDate = (dateVal) => {
+        if (!dateVal || dateVal === '0' || dateVal === 0) return '未知时间';
+        
+        let d;
+        if (typeof dateVal === 'number' || /^\d+$/.test(dateVal)) {
+            const num = parseInt(dateVal, 10);
+            if (num === 0) return '未知时间';
+            d = new Date(num < 10000000000 ? num * 1000 : num);
+        } else {
+            d = new Date(dateVal);
+        }
+
         if (isNaN(d.getTime()) || d.getFullYear() <= 1970) {
             return '未知时间';
         }
+        
         return d.toLocaleString('zh-CN', { hour12: false });
     };
 
     useEffect(() => {
         if (!selectedSite) return;
+        
+        setPagesList([]);
+        setGeneratedCode('');
+        setDeletedPages([]);
+
         let isMounted = true;
         
         const checkDeletedCategory = async () => {
             setIsCheckingDeleted(true);
-            setDeletedPages([]);
             try {
                 const wikiConfig = wikis.find(w => w.PARAM === selectedSite);
                 if (!wikiConfig) return;
@@ -89,7 +103,6 @@ const DeleteAnnouncement = () => {
         return () => { isMounted = false; };
     }, [selectedSite, wikis]);
 
-    // 修改：改为调用专用的极简源码抓取 API
     const fetchSourceCode = async (siteParam, pageName) => {
         const res = await fetch(`/api/source?site=${siteParam}&page=${encodeURIComponent(pageName)}`);
         const data = await res.json();
@@ -152,7 +165,6 @@ const DeleteAnnouncement = () => {
                     };
                     
                     try {
-                        // 修改：仅抓取源码并赋值
                         const sourceCode = await fetchSourceCode(selectedSite, node.page);
                         if (sourceCode) {
                             fullData.sourceCode = sourceCode;
@@ -212,7 +224,8 @@ const DeleteAnnouncement = () => {
             const rating = p.rating || 0;
             const sourceCode = p.sourceCode || '[[无可用源码，请手动补充]]';
             
-            code += `由于发布删除宣告时本页面已处于 [宣告分数] 的低分，现已跌至 ${rating} 分，且在宣告删除后的 [24/72] 小时内无异议，故删除「${title}」。[[collapsible show="+ 页面源代码" hide="- 收起"]]\n`;
+            code += `由于发布删除宣告时本页面已处于 [宣告分数] 的低分，现已跌至 ${rating} 分，且在宣告删除后的 [24/72] 小时内无异议，故删除「${title}」。\n`;
+            code += `[[collapsible show="+ 页面源代码" hide="- 收起"]]\n`;
             code += `[[code]]\n`;
             code += `${sourceCode}\n`;
             code += `[[/code]]\n`;
@@ -223,9 +236,12 @@ const DeleteAnnouncement = () => {
     };
 
     const copyToClipboard = () => {
-        navigator.clipboard.writeText(generatedCode).then(() => {
-            alert('代码已复制到剪贴板！');
-        });
+        const container = document.getElementById('generated-code-container');
+        if (container) {
+            navigator.clipboard.writeText(container.innerText).then(() => {
+                alert('代码已复制到剪贴板！');
+            });
+        }
     };
 
     return (
@@ -385,12 +401,11 @@ const DeleteAnnouncement = () => {
                             生成公告代码
                         </button>
                     </div>
-                    <textarea 
-                        className="w-full h-48 bg-gray-900 border border-gray-700 text-gray-300 rounded-lg p-4 font-mono text-sm focus:outline-none focus:border-indigo-500 resize-y"
-                        readOnly
-                        value={generatedCode}
-                        placeholder="点击右上角按钮生成代码..."
-                    ></textarea>
+                    <div 
+                        id="generated-code-container"
+                        className="w-full h-48 bg-gray-900 border border-gray-700 text-gray-300 rounded-lg p-4 font-mono text-sm overflow-auto resize-y whitespace-pre-wrap outline-none"
+                        dangerouslySetInnerHTML={{ __html: generatedCode || '点击右上角按钮生成代码...' }}
+                    />
                     {generatedCode && !generatedCode.includes('请先添加') && (
                         <div className="mt-4 flex justify-end">
                             <button 
@@ -407,4 +422,4 @@ const DeleteAnnouncement = () => {
     );
 };
 
-export default DeleteAnnouncement;
+export default DeleteAnnouncement;uncement;
