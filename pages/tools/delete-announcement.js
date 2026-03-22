@@ -9,7 +9,6 @@ const DeleteAnnouncement = () => {
     const [selectedSite, setSelectedSite] = useState(wikis.length > 0 ? wikis[0].PARAM : '');
     const [tagInput, setTagInput] = useState('待删除');
     const [pagesList, setPagesList] = useState([]);
-    const [isFetchingSingle, setIsFetchingSingle] = useState(false);
     const [isBatchFetching, setIsBatchFetching] = useState(false);
     const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0 });
     
@@ -93,28 +92,6 @@ const DeleteAnnouncement = () => {
         return () => { isMounted = false; };
     }, [selectedSite, wikis]);
 
-    // 解析输入的 URL 或页面名
-    const parseInputStr = (inputStr) => {
-        let site = selectedSite;
-        let page = inputStr.trim();
-        
-        if (page.startsWith('http')) {
-            try {
-                const url = new URL(page);
-                const host = url.hostname;
-                const path = url.pathname.substring(1);
-                
-                const matchedSite = wikis.find(w => {
-                    try { return new URL(w.URL).hostname === host; } catch(e) { return false; }
-                });
-                
-                if (matchedSite) site = matchedSite.PARAM;
-                page = path;
-            } catch (e) {}
-        }
-        return { site, page };
-    };
-
     const fetchPageData = async (siteParam, pageName) => {
         const res = await fetch(`/api/page?site=${siteParam}&page=${encodeURIComponent(pageName)}`);
         const data = await res.json();
@@ -127,26 +104,6 @@ const DeleteAnnouncement = () => {
             }
         }
         return data;
-    };
-
-    const handleSingleAdd = async (e) => {
-        e.preventDefault();
-        if (!searchInput.trim() || !selectedSite) return;
-        
-        setIsFetchingSingle(true);
-        try {
-            const { site, page } = parseInputStr(searchInput);
-            const data = await fetchPageData(site, page);
-            
-            if (!pagesList.find(p => p.originalUrl === data.originalUrl)) {
-                setPagesList(prev => [...prev, data]);
-            }
-            setSearchInput('');
-        } catch (err) {
-            alert(`抓取失败: ${err.message}`);
-        } finally {
-            setIsFetchingSingle(false);
-        }
     };
 
     // 按标签自动抓取页面（包含源码抓取进度）
@@ -338,28 +295,8 @@ const DeleteAnnouncement = () => {
                     </div>
                 )}
 
-                {/* 搜索添加与标签抓取表单 */}
+                {/* 标签抓取表单 */}
                 <div className="flex flex-col sm:flex-row gap-4 mb-6 bg-gray-800/50 p-4 rounded-xl border border-white/5">
-                    <form onSubmit={handleSingleAdd} className="flex-1 flex flex-col sm:flex-row gap-3 border-b sm:border-b-0 sm:border-r border-gray-700 pb-4 sm:pb-0 sm:pr-4">
-                        <div className="relative flex-1">
-                            <input
-                                type="text"
-                                placeholder="输入页面 URL 或英文名..."
-                                value={searchInput}
-                                onChange={(e) => setSearchInput(e.target.value)}
-                                disabled={isFetchingSingle || isBatchFetching}
-                                className="w-full bg-gray-900 border border-gray-600 text-white text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2.5 px-4 disabled:opacity-50"
-                            />
-                        </div>
-                        <button 
-                            type="submit"
-                            disabled={isFetchingSingle || isBatchFetching || !searchInput.trim()}
-                            className="px-4 py-2.5 bg-gray-700 text-gray-200 font-medium rounded-lg hover:bg-gray-600 disabled:opacity-50 transition-colors shrink-0"
-                        >
-                            {isFetchingSingle ? '添加中...' : '单独添加'}
-                        </button>
-                    </form>
-                    
                     <form onSubmit={handleTagFetch} className="flex-1 flex flex-col sm:flex-row gap-3">
                         <div className="relative flex-1">
                             <input
@@ -367,7 +304,7 @@ const DeleteAnnouncement = () => {
                                 placeholder="输入抓取标签 (如: 待删除)..."
                                 value={tagInput}
                                 onChange={(e) => setTagInput(e.target.value)}
-                                disabled={isBatchFetching || isFetchingSingle}
+                                disabled={isBatchFetching}
                                 className="w-full bg-gray-900 border border-gray-600 text-white text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2.5 px-4 disabled:opacity-50"
                             />
                         </div>
@@ -375,7 +312,7 @@ const DeleteAnnouncement = () => {
                             className="bg-gray-900 border border-gray-600 text-white text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 p-2.5 sm:w-36 outline-none"
                             value={selectedSite}
                             onChange={(e) => setSelectedSite(e.target.value)}
-                            disabled={isBatchFetching || isFetchingSingle}
+                            disabled={isBatchFetching}
                         >
                             {wikis.map(wiki => (
                                 <option key={wiki.PARAM} value={wiki.PARAM}>{wiki.NAME}</option>
@@ -383,7 +320,7 @@ const DeleteAnnouncement = () => {
                         </select>
                         <button 
                             type="submit"
-                            disabled={isBatchFetching || isFetchingSingle || !tagInput.trim()}
+                            disabled={isBatchFetching || !tagInput.trim()}
                             className="px-4 py-2.5 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors shrink-0"
                         >
                             {isBatchFetching ? `抓取中... ${batchProgress.total > 0 ? `(${batchProgress.current}/${batchProgress.total})` : ''}` : '按标签抓取'}
