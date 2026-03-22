@@ -41,7 +41,11 @@ export default async function handler(req, res) {
         
         const ajaxHeaders = {
             'User-Agent': fetchHeaders['User-Agent'],
+            'Accept': 'application/json, text/javascript, */*; q=0.01',
             'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+            'X-Requested-With': 'XMLHttpRequest',
+            'Origin': origin,
+            'Referer': secureUrl,
             'Cookie': 'wikidot_token7=123456;'
         };
 
