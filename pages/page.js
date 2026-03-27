@@ -2,31 +2,9 @@ import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Filler,
-  Legend,
-} from 'chart.js';
-import { Line } from 'react-chartjs-2';
+import TradingChart from '../components/TradingChart';
 
 const config = require('../wikitdb.config.js');
-
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Filler,
-  Legend
-);
 
 const PageDetail = () => {
     const router = useRouter();
@@ -41,9 +19,9 @@ const PageDetail = () => {
     const [maxHpage, setMaxHpage] = useState(1);
     const [historyLoading, setHistoryLoading] = useState(false);
 
-    // 交易弹窗及表单状态
+    // 交易面板表单状态
     const [isTradeModalOpen, setIsTradeModalOpen] = useState(false);
-    const [tradeDirection, setTradeDirection] = useState('long');
+    const [tradeDirection, setTradeDirection] = useState('long'); 
     const [margin, setMargin] = useState('');
     const [lockType, setLockType] = useState('T1 (24h)');
     const [leverage, setLeverage] = useState('2x');
@@ -110,7 +88,6 @@ const PageDetail = () => {
         };
     }, [router.isReady, site, page]);
 
-    // 点击开仓按钮时的拦截校验
     const handleOpenTradeModal = () => {
         const username = localStorage.getItem('username');
         if (!username) {
@@ -121,7 +98,6 @@ const PageDetail = () => {
         setIsTradeModalOpen(true);
     };
 
-    // 真正向数据库提交开仓记录的函数
     const handleTradeSubmit = async () => {
         const username = localStorage.getItem('username');
         if (!username) {
@@ -185,94 +161,40 @@ const PageDetail = () => {
     if (!data) return null;
 
     let chartData = [];
+    let markers = [];
+
     if (data.scoreHistory && data.scoreHistory.length > 0) {
-        chartData = data.scoreHistory.map((item) => ({
-            originalScore: item.score,
-            stockPrice: 100 + item.score,
-            date: item.date
-        }));
-        
-        if (chartData[0].date === '初始记录') {
-            chartData[0].originalScore = 0;
-            chartData[0].stockPrice = 100;
-        } else {
-            chartData.unshift({ originalScore: 0, stockPrice: 100, date: chartData[0].date });
-        }
-    }
+        // 把后端给的数据转成交易图表需要的格式
+        chartData = data.scoreHistory.map((item, index, arr) => {
+            let timeValue = item.date;
+            if (timeValue === '初始记录' || timeValue === '开仓') {
+                timeValue = data.scoreHistory[1]?.date || new Date().toISOString().split('T')[0];
+            }
 
-    // TradingView 风格的图表配置
-    const lineChartData = {
-        labels: chartData.map(d => d.date),
-        datasets: [
+            const currentScore = 100 + item.score;
+            const prevScore = index === 0 ? 100 : 100 + arr[index - 1].score;
+
+            return {
+                time: timeValue,
+                value: currentScore, 
+                open: prevScore,     
+                close: currentScore, 
+                high: Math.max(prevScore, currentScore) + 0.5,
+                low: Math.min(prevScore, currentScore) - 0.5,
+            };
+        });
+
+        // 默认放个做多标记做演示，之后可以换成真实交易数据
+        markers = [
             {
-                label: '页面大盘',
-                data: chartData.map(d => d.stockPrice),
-                borderColor: '#00bcd4', 
-                backgroundColor: 'rgba(0, 188, 212, 0.1)', 
-                fill: true,
-                borderWidth: 2,
-                tension: 0, 
-                pointRadius: 0, 
-                pointHoverRadius: 5,
-                pointBackgroundColor: '#00bcd4',
+                time: chartData[chartData.length - 1].time,
+                position: 'belowBar',
+                color: '#16a34a',
+                shape: 'arrowUp',
+                text: '做多',
             }
-        ]
-    };
-
-    const lineChartOptions = {
-        responsive: true,
-        maintainAspectRatio: false,
-        layout: {
-            padding: { top: 20, bottom: 20, left: 10, right: 10 }
-        },
-        scales: {
-            y: {
-                position: 'right', 
-                suggestedMin: 80,
-                suggestedMax: 120,
-                ticks: {
-                    color: '#6b7280',
-                    font: { size: 12, family: 'sans-serif' }
-                },
-                grid: {
-                    color: '#f3f4f6', 
-                    drawBorder: false,
-                }
-            },
-            x: {
-                ticks: {
-                    color: '#9ca3af',
-                    maxTicksLimit: 8,
-                    font: { size: 11, family: 'sans-serif' }
-                },
-                grid: {
-                    color: '#f3f4f6',
-                    drawBorder: false,
-                }
-            }
-        },
-        plugins: {
-            legend: { display: false },
-            tooltip: {
-                backgroundColor: 'rgba(17, 24, 39, 0.8)',
-                titleColor: '#fff',
-                bodyColor: '#fff',
-                padding: 10,
-                displayColors: false,
-                intersect: false,
-                mode: 'index',
-                callbacks: {
-                    label: function(context) {
-                        return `现价: ${context.parsed.y.toFixed(2)}`;
-                    }
-                }
-            }
-        },
-        interaction: {
-            intersect: false,
-            mode: 'index',
-        },
-    };
+        ];
+    }
 
     return (
         <>
@@ -280,9 +202,8 @@ const PageDetail = () => {
                 <title>{`${data.title} - ${config.SITE_NAME}`}</title>
             </Head>
 
-            {/* 开仓交易面板 */}
             {isTradeModalOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
                     <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-2xl m-4">
                         <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center">
                             开仓 <span className="text-gray-500 font-normal ml-2 text-base truncate max-w-[200px]">{data.title}</span>
@@ -616,7 +537,7 @@ const PageDetail = () => {
                                         <div>
                                             <div className="text-xs text-gray-500 mb-1 tracking-wider uppercase">{data.title} 的股票</div>
                                             <div className="text-4xl font-bold text-gray-900 leading-none">
-                                                {chartData[chartData.length - 1].stockPrice.toFixed(4)}
+                                                {chartData[chartData.length - 1].value.toFixed(4)}
                                             </div>
                                         </div>
                                         <button 
@@ -626,8 +547,8 @@ const PageDetail = () => {
                                             开仓
                                         </button>
                                     </div>
-                                    <div className="w-full h-[320px] relative border border-gray-100 rounded">
-                                        <Line data={lineChartData} options={lineChartOptions} />
+                                    <div className="w-full h-[320px] relative border border-gray-100 rounded overflow-hidden">
+                                        <TradingChart data={chartData} markers={markers} isCandle={false} />
                                     </div>
                                 </div>
                             ) : (
