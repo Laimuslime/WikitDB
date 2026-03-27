@@ -8,40 +8,35 @@ export default function Register() {
     const [message, setMessage] = useState('');
     const [loading, setLoading] = useState(false);
     
-    // 流程控制：1=填信息 2=去绑定 3=确认拉取到的WDID
     const [step, setStep] = useState(1);
     const [verifyUrl, setVerifyUrl] = useState('');
-    const [generatedQq, setGeneratedQq] = useState(''); 
     const [wdid, setWdid] = useState(''); 
 
-    // 页面加载时，检查有没有未过期的注册进度（24小时自动清理）
+    // 恢复界面的状态（不管怎么刷新，只靠用户名去后端找）
     useEffect(() => {
-        const sessionStr = localStorage.getItem('wikit_reg_session');
+        const sessionStr = localStorage.getItem('wikit_reg_ui_state');
         if (sessionStr) {
             try {
-                const session = JSON.parse(sessionStr);
-                // 检查是否在 24 小时有效期内
-                if (Date.now() < session.expireTime) {
-                    setFormData({ username: session.username, password: session.password });
-                    setGeneratedQq(session.qq);
-                    setVerifyUrl(session.verifyUrl);
-                    setStep(2); // 进度恢复，直接跳转到步骤2
-                } else {
-                    // 超过 24 小时，自动清理记录
-                    localStorage.removeItem('wikit_reg_session');
-                }
+                const state = JSON.parse(sessionStr);
+                setFormData({ username: state.username, password: '' });
+                setVerifyUrl(state.verifyUrl || '');
+                setWdid(state.wdid || '');
+                setStep(state.step || 1);
             } catch (e) {
-                localStorage.removeItem('wikit_reg_session');
+                localStorage.removeItem('wikit_reg_ui_state');
             }
         }
     }, []);
+
+    const saveState = (newState) => {
+        localStorage.setItem('wikit_reg_ui_state', JSON.stringify(newState));
+    };
 
     const handleChange = (e) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
     };
 
-    // 步骤 1：开始注册，获取绑定链接
     const handleRegisterStart = async (e) => {
         e.preventDefault();
         
@@ -53,42 +48,25 @@ export default function Register() {
         setLoading(true);
         setMessage('');
 
-        const qq = Math.floor(1000000000 + Math.random() * 9000000000).toString();
-        const token = '9a3f6c1d8e2b4a7f0c5d9e3b1a6f8c2d';
-
         try {
-            const res = await fetch('/api/verify', {
+            const res = await fetch('/api/register', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ qq, token })
+                body: JSON.stringify({ 
+                    action: 'start', 
+                    username: formData.username, 
+                    password: formData.password 
+                })
             });
 
-            const rawText = await res.text();
-            let url = '';
-            
-            try {
-                const data = JSON.parse(rawText);
-                url = data['verification-link'] || '';
-            } catch (err) {
-                const match = rawText.match(/https?:\/\/[^\s"'\\]+/);
-                if (match) url = match[0];
-            }
+            const data = await res.json();
 
-            if (url && url.startsWith('http')) {
-                setVerifyUrl(url);
-                setGeneratedQq(qq);
+            if (res.ok && data.verifyUrl) {
+                setVerifyUrl(data.verifyUrl);
                 setStep(2);
-
-                // 记录 QQID 和当前进度，存入本地，有效期设为 24 小时 (24 * 60 * 60 * 1000)
-                localStorage.setItem('wikit_reg_session', JSON.stringify({
-                    username: formData.username,
-                    password: formData.password,
-                    qq: qq,
-                    verifyUrl: url,
-                    expireTime: Date.now() + 86400000 
-                }));
+                saveState({ username: formData.username, step: 2, verifyUrl: data.verifyUrl });
             } else {
-                setMessage('没能在返回数据里找到验证链接');
+                setMessage(data.error || '获取链接失败');
             }
         } catch (err) {
             setMessage('网络请求失败，请检查连接');
@@ -97,44 +75,36 @@ export default function Register() {
         }
     };
 
-    // 步骤 2：去查询绑定的 WDID
     const handleCheckBind = async () => {
-        if (!generatedQq) {
-            setMessage('找不到 QQID 记录，请返回上一步重新生成');
-            return;
-        }
-
         setLoading(true);
         setMessage('');
 
         try {
-            const res = await fetch(`/api/query-bind?qq=${generatedQq}`);
-            const rawText = await res.text();
+            const res = await fetch('/api/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    action: 'check', 
+                    username: formData.username 
+                })
+            });
             
-            let fetchedWdid = '';
-            
-            try {
-                const data = JSON.parse(rawText);
-                fetchedWdid = data.wdid || data.user || data.username || data.account || data.data || '';
-            } catch (err) {
-                fetchedWdid = rawText.trim();
-            }
+            const data = await res.json();
 
-            // 拦截无效数据（错误信息、HTML标签、false等）
-            if (fetchedWdid && !fetchedWdid.toLowerCase().includes('error') && !fetchedWdid.includes('<') && fetchedWdid !== 'false' && fetchedWdid !== 'null') {
-                setWdid(fetchedWdid);
-                setStep(3); 
+            if (res.ok && data.wdid) {
+                setWdid(data.wdid);
+                setStep(3);
+                saveState({ username: formData.username, step: 3, verifyUrl, wdid: data.wdid });
             } else {
-                setMessage('还没查到你的绑定信息，是不是还没在 Wikidot 上操作完？');
+                setMessage(data.error || '查询绑定状态失败了，稍后再试一下');
             }
         } catch (err) {
-            setMessage('查询绑定状态失败了，稍后再试一下');
+            setMessage('服务器通信失败，稍后再试一下');
         } finally {
             setLoading(false);
         }
     };
 
-    // 步骤 3：确认入库
     const handleFinalSubmit = async () => {
         setLoading(true);
         setMessage('');
@@ -143,12 +113,14 @@ export default function Register() {
             const res = await fetch('/api/register', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ...formData, wikidotAccount: wdid })
+                body: JSON.stringify({ 
+                    action: 'submit', 
+                    username: formData.username 
+                })
             });
             
             if (res.ok) {
-                // 注册成功后清理本地的临时记录
-                localStorage.removeItem('wikit_reg_session');
+                localStorage.removeItem('wikit_reg_ui_state');
                 localStorage.setItem('username', formData.username);
                 
                 setMessage('注册成功！正在进入首页...');
@@ -166,12 +138,11 @@ export default function Register() {
         }
     };
 
-    // 重置注册流程
     const handleReset = () => {
-        localStorage.removeItem('wikit_reg_session');
+        localStorage.removeItem('wikit_reg_ui_state');
         setStep(1);
-        setGeneratedQq('');
         setVerifyUrl('');
+        setWdid('');
         setMessage('');
     };
 
