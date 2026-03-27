@@ -10,7 +10,7 @@ export default async function handler(req, res) {
 
     if (!username) return res.status(400).json({ error: '缺少显示名称' });
 
-    // 步骤一：生成 QQID，获取链接，并存入 Redis 临时库 (有效期 24 小时)
+    // 步骤一：生成 QQID
     if (action === 'start') {
         if (!password) return res.status(400).json({ error: '缺少密码' });
 
@@ -38,7 +38,6 @@ export default async function handler(req, res) {
 
             if (url && url.startsWith('http')) {
                 const hashedPassword = await bcrypt.hash(password, 10);
-                // 存入数据库，设置 86400 秒 (24小时) 过期
                 await redis.set(`temp_reg:${username}`, { qq, password: hashedPassword, verifyUrl: url }, { ex: 86400 });
                 return res.status(200).json({ verifyUrl: url });
             } else {
@@ -49,7 +48,7 @@ export default async function handler(req, res) {
         }
     }
 
-    // 步骤二：从数据库读取 QQID 并查询绑定状态
+    // 步骤二：查询绑定状态
     if (action === 'check') {
         const tempRecord = await redis.get(`temp_reg:${username}`);
         if (!tempRecord) return res.status(400).json({ error: '验证会话已过期 (超过24小时) 或不存在' });
@@ -67,7 +66,6 @@ export default async function handler(req, res) {
             }
 
             if (wdid && !wdid.toLowerCase().includes('error') && !wdid.includes('<') && wdid !== 'false' && wdid !== 'null') {
-                // 查询成功，把 WDID 补充进数据库的临时记录里
                 await redis.set(`temp_reg:${username}`, { ...tempRecord, wdid }, { ex: 86400 });
                 return res.status(200).json({ wdid });
             } else {
@@ -78,7 +76,7 @@ export default async function handler(req, res) {
         }
     }
 
-    // 步骤三：确认无误，转移数据到正式用户库
+    // 步骤三：确认入库（新增初始余额发放）
     if (action === 'submit') {
         const tempRecord = await redis.get(`temp_reg:${username}`);
         if (!tempRecord || !tempRecord.wdid) return res.status(400).json({ error: '数据已过期或未完成验证' });
@@ -88,9 +86,9 @@ export default async function handler(req, res) {
                 username,
                 wikidotAccount: tempRecord.wdid,
                 password: tempRecord.password,
+                balance: 10000, // <--- 给新注册用户发放 10000 块钱初始本金
                 createdAt: Date.now()
             });
-            // 注册成功，删掉临时记录
             await redis.del(`temp_reg:${username}`);
             return res.status(200).json({ message: '注册成功' });
         } catch (e) {
