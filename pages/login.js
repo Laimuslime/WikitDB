@@ -20,7 +20,7 @@ export default function Login() {
         e.preventDefault();
         
         if (!formData.username || !formData.password) {
-            setMessage('用户名和密码都要填');
+            setMessage('请输入用户名和密码');
             return;
         }
 
@@ -28,7 +28,6 @@ export default function Login() {
         setMessage('');
 
         try {
-            // 请求后端的登录接口
             const res = await fetch('/api/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -40,13 +39,13 @@ export default function Login() {
             if (res.ok) {
                 setMessage('登录成功，跳转中...');
                 setTimeout(() => {
-                    router.push('/'); // 登录完跳回首页
+                    router.push('/');
                 }, 1000);
             } else {
-                setMessage(data.error || '账号或密码不对');
+                setMessage(data.error || '账号或密码错误');
             }
         } catch (err) {
-            setMessage('网络请求失败了');
+            setMessage('网络请求失败');
         } finally {
             setLoading(false);
         }
