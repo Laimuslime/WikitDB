@@ -13,8 +13,7 @@ export default function Register() {
     const [message, setMessage] = useState('');
     const [loading, setLoading] = useState(false);
 
-    // 验证状态管理
-    const [verificationCode, setVerificationCode] = useState('');
+    const [verifyUrl, setVerifyUrl] = useState('');
     const [isVerified, setIsVerified] = useState(false);
     const [isVerifying, setIsVerifying] = useState(false);
 
@@ -23,42 +22,52 @@ export default function Register() {
         setFormData(prev => ({ ...prev, [name]: value }));
     };
 
-    // 生成 10 位随机数字验证码
-    const handleGenerateCode = () => {
+    const handleGenerateLink = async () => {
         if (!formData.wikidotAccount) {
             setMessage('请先填写 Wikidot 账号');
             return;
         }
-        
-        // 随机生成 10 位数
-        const code = Math.floor(1000000000 + Math.random() * 9000000000).toString();
-        setVerificationCode(code);
-        setIsVerified(false);
-        setMessage('');
-    };
 
-    // 调用接口验证
-    const handleVerify = async () => {
         setIsVerifying(true);
         setMessage('');
-        
+        setVerifyUrl('');
+
+        // 生成 10 位随机数当做 QQ 号传给后端
+        const fakeQQ = Math.floor(1000000000 + Math.random() * 9000000000).toString();
+
         try {
+            // 使用 URLSearchParams 兼容传统 API 的表单接收格式
+            const params = new URLSearchParams();
+            params.append('qq', fakeQQ);
+            params.append('token', '9a3f6c1d8e2b4a7f0c5d9e3b1a6f8c2d');
+
             const res = await fetch('https://wikit.unitreaty.org/module/qq-verify', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    qq: verificationCode,
-                    token: '9a3f6c1d8e2b4a7f0c5d9e3b1a6f8c2d'
-                })
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: params.toString()
             });
 
-            if (res.ok) {
-                setIsVerified(true);
+            const text = await res.text();
+            let extractedUrl = '';
+            
+            try {
+                const data = JSON.parse(text);
+                // 尝试从常见的返回结构中提取链接
+                extractedUrl = data.url || data.link || data.data || text;
+            } catch {
+                // 如果后端直接返回纯文本链接
+                extractedUrl = text;
+            }
+
+            // 简单校验一下是不是正常的链接格式
+            if (extractedUrl && extractedUrl.includes('http')) {
+                const httpMatch = extractedUrl.match(/https?:\/\/[^\s"]+/);
+                setVerifyUrl(httpMatch ? httpMatch[0] : extractedUrl);
             } else {
-                setMessage('验证失败，请确保代码已放入个人资料中');
+                setMessage('获取绑定链接失败，接口返回的数据无法识别为链接');
             }
         } catch (err) {
-            setMessage('请求验证接口失败，请检查网络');
+            setMessage('请求验证接口失败，请检查控制台是否有跨域报错或网络问题');
         } finally {
             setIsVerifying(false);
         }
@@ -73,7 +82,7 @@ export default function Register() {
         }
 
         if (!isVerified) {
-            setMessage('请先完成 Wikidot 账号验证');
+            setMessage('请先完成 Wikidot 账号验证流程');
             return;
         }
 
@@ -131,7 +140,6 @@ export default function Register() {
                         />
                     </div>
                     
-                    {/* Wikidot 账号验证区域 */}
                     <div>
                         <label className="block text-sm font-medium text-gray-400 mb-1">Wikidot 账号</label>
                         <div className="flex gap-2">
@@ -143,30 +151,44 @@ export default function Register() {
                                 disabled={isVerified}
                                 className="flex-1 bg-gray-900 border border-gray-600 text-white text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2.5 outline-none transition-colors disabled:opacity-50"
                             />
-                            <button 
-                                type="button"
-                                onClick={handleGenerateCode}
-                                disabled={isVerified}
-                                className="shrink-0 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50 disabled:bg-green-600"
-                            >
-                                {isVerified ? '验证通过' : '获取验证代码'}
-                            </button>
-                        </div>
-
-                        {/* 验证代码提示框 */}
-                        {verificationCode && !isVerified && (
-                            <div className="mt-3 p-4 bg-gray-900/50 border border-gray-600 rounded-lg">
-                                <p className="text-sm text-gray-300 mb-3 leading-relaxed">
-                                    请将验证代码 <span className="font-mono font-bold text-white bg-gray-800 border border-gray-600 px-2 py-1 rounded">{verificationCode}</span> 放入您的 Wikidot 个人资料的「About」中，然后点击验证。
-                                </p>
+                            {!isVerified && (
                                 <button 
                                     type="button"
-                                    onClick={handleVerify}
+                                    onClick={handleGenerateLink}
                                     disabled={isVerifying}
-                                    className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+                                    className="shrink-0 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
                                 >
-                                    {isVerifying ? '正在验证...' : '验证'}
+                                    {isVerifying ? '获取中...' : '获取绑定链接'}
                                 </button>
+                            )}
+                        </div>
+
+                        {verifyUrl && !isVerified && (
+                            <div className="mt-3 p-4 bg-gray-900/50 border border-gray-600 rounded-lg">
+                                <p className="text-sm text-gray-300 mb-3 leading-relaxed">
+                                    请点击下方链接前往授权。完成绑定后，回来点击“我已完成绑定”继续注册。
+                                </p>
+                                <a 
+                                    href={verifyUrl} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    className="block w-full py-2 mb-3 text-center bg-gray-800 border border-gray-600 hover:bg-gray-700 text-indigo-400 text-sm font-medium rounded-lg transition-colors break-all px-2"
+                                >
+                                    打开绑定链接
+                                </a>
+                                <button 
+                                    type="button"
+                                    onClick={() => setIsVerified(true)}
+                                    className="w-full py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors"
+                                >
+                                    我已完成绑定
+                                </button>
+                            </div>
+                        )}
+
+                        {isVerified && (
+                            <div className="mt-2 text-sm text-green-400 flex items-center">
+                                账号验证已就绪
                             </div>
                         )}
                     </div>
