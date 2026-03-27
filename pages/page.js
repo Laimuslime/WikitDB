@@ -28,6 +28,21 @@ ChartJS.register(
   Legend
 );
 
+const neonGlowPlugin = {
+    id: 'neonGlow',
+    beforeDatasetsDraw: (chart) => {
+        const ctx = chart.ctx;
+        ctx.save();
+        ctx.shadowColor = chart.data.datasets[0].borderColor;
+        ctx.shadowBlur = 15;
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 0;
+    },
+    afterDatasetsDraw: (chart) => {
+        chart.ctx.restore();
+    }
+};
+
 const PageDetail = () => {
     const router = useRouter();
     const { site, page } = router.query;
@@ -132,8 +147,7 @@ const PageDetail = () => {
     }
 
     const isNegative = chartData.length > 0 && chartData[chartData.length - 1].score < 0;
-    const stockColor = isNegative ? 'rgba(34, 197, 94, 1)' : 'rgba(239, 68, 68, 1)';
-    const stockBg = isNegative ? 'rgba(34, 197, 94, 0.2)' : 'rgba(239, 68, 68, 0.2)';
+    const neonColor = isNegative ? 'rgba(244, 63, 94, 1)' : 'rgba(56, 189, 248, 1)';
 
     const lineChartData = {
         labels: chartData.map(d => d.date),
@@ -142,11 +156,11 @@ const PageDetail = () => {
                 fill: 'origin',
                 label: '页面评分',
                 data: chartData.map(d => d.score),
-                borderColor: stockColor,
+                borderColor: neonColor,
                 backgroundColor: (context) => {
                     const chart = context.chart;
                     const { ctx, chartArea, scales } = chart;
-                    if (!chartArea) return stockBg;
+                    if (!chartArea) return 'transparent';
                     
                     const zeroY = scales.y.getPixelForValue(0);
                     const topY = chartArea.top;
@@ -155,22 +169,22 @@ const PageDetail = () => {
                     const zeroRatio = Math.max(0, Math.min(1, (zeroY - topY) / (bottomY - topY)));
                     
                     if (isNegative) {
-                        gradient.addColorStop(0, 'rgba(34, 197, 94, 0)');
-                        gradient.addColorStop(zeroRatio, 'rgba(34, 197, 94, 0)');
-                        gradient.addColorStop(1, 'rgba(34, 197, 94, 0.5)');
+                        gradient.addColorStop(0, 'rgba(244, 63, 94, 0)');
+                        gradient.addColorStop(zeroRatio, 'rgba(244, 63, 94, 0)');
+                        gradient.addColorStop(1, 'rgba(244, 63, 94, 0.4)');
                     } else {
-                        gradient.addColorStop(0, 'rgba(239, 68, 68, 0.5)');
-                        gradient.addColorStop(zeroRatio, 'rgba(239, 68, 68, 0)');
-                        gradient.addColorStop(1, 'rgba(239, 68, 68, 0)');
+                        gradient.addColorStop(0, 'rgba(56, 189, 248, 0.4)');
+                        gradient.addColorStop(zeroRatio, 'rgba(56, 189, 248, 0)');
+                        gradient.addColorStop(1, 'rgba(56, 189, 248, 0)');
                     }
                     return gradient;
                 },
-                borderWidth: 2,
-                tension: 0,
-                pointBackgroundColor: stockColor,
-                pointBorderColor: '#1F2937',
-                pointBorderWidth: 1,
-                pointRadius: 0,
+                borderWidth: 3,
+                tension: 0.4, 
+                pointBackgroundColor: neonColor,
+                pointBorderColor: '#ffffff',
+                pointBorderWidth: 2,
+                pointRadius: 0, 
                 pointHoverRadius: 6,
             }
         ]
@@ -190,11 +204,11 @@ const PageDetail = () => {
                     precision: 0, 
                     stepSize: 10, 
                     color: '#9CA3AF',
-                    font: { size: 12, family: 'monospace' }
+                    font: { size: 12 }
                 },
                 grid: {
-                    color: (context) => context.tick.value === 0 ? '#6B7280' : 'rgba(55, 65, 81, 0.5)',
-                    borderDash: (context) => context.tick.value === 0 ? [] : [2, 4],
+                    color: (context) => context.tick.value === 0 ? 'rgba(107, 114, 128, 0.5)' : 'rgba(55, 65, 81, 0.3)',
+                    borderDash: (context) => context.tick.value === 0 ? [] : [4, 4],
                     drawBorder: false,
                 }
             },
@@ -202,12 +216,10 @@ const PageDetail = () => {
                 ticks: {
                     color: '#9CA3AF',
                     maxTicksLimit: 8,
-                    font: { size: 10, family: 'monospace' }
+                    font: { size: 10 }
                 },
                 grid: {
-                    display: true,
-                    color: 'rgba(55, 65, 81, 0.3)',
-                    drawBorder: false,
+                    display: false
                 }
             }
         },
@@ -217,8 +229,7 @@ const PageDetail = () => {
                 backgroundColor: 'rgba(17, 24, 39, 0.9)',
                 titleColor: '#9CA3AF',
                 bodyColor: '#FFFFFF',
-                bodyFont: { family: 'monospace', size: 14, weight: 'bold' },
-                borderColor: stockColor,
+                borderColor: neonColor,
                 borderWidth: 1,
                 padding: 12,
                 displayColors: false,
@@ -509,7 +520,7 @@ const PageDetail = () => {
                                         <i className="fa-solid fa-chart-line text-indigo-400"></i> 按日评分走势
                                     </h3>
                                     <div className="w-full h-[320px] relative">
-                                        <Line data={lineChartData} options={lineChartOptions} />
+                                        <Line data={lineChartData} options={lineChartOptions} plugins={[neonGlowPlugin]} />
                                     </div>
                                 </div>
                             ) : (
