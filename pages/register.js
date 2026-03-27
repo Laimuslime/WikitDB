@@ -8,16 +8,18 @@ export default function Register() {
     const [message, setMessage] = useState('');
     const [loading, setLoading] = useState(false);
     
-    // 控制步骤：1是填名字密码，2是去Wikidot绑定
+    // 流程控制：1=填信息 2=去绑定 3=确认拉取到的WDID
     const [step, setStep] = useState(1);
     const [verifyUrl, setVerifyUrl] = useState('');
+    const [generatedQq, setGeneratedQq] = useState(''); // 保存生成的 ID 供后续查询用
+    const [wdid, setWdid] = useState(''); // 保存拉取到的 Wikidot ID
 
     const handleChange = (e) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
     };
 
-    // 第一步：点击注册，获取验证链接
+    // 步骤 1：开始注册，获取绑定链接
     const handleRegisterStart = async (e) => {
         e.preventDefault();
         
@@ -31,6 +33,9 @@ export default function Register() {
 
         const qq = Math.floor(1000000000 + Math.random() * 9000000000).toString();
         const token = '9a3f6c1d8e2b4a7f0c5d9e3b1a6f8c2d';
+        
+        // 存下来，等会儿查绑定状态要用
+        setGeneratedQq(qq);
 
         try {
             const res = await fetch('/api/verify', {
@@ -44,10 +49,8 @@ export default function Register() {
             
             try {
                 const data = JSON.parse(rawText);
-                // 精准提取 verification-link 字段
                 url = data['verification-link'] || '';
             } catch (err) {
-                // 如果后端真的没返回标准 JSON，再作为备用正则提取
                 const match = rawText.match(/https?:\/\/[^\s"'\\]+/);
                 if (match) url = match[0];
             }
@@ -56,17 +59,50 @@ export default function Register() {
                 setVerifyUrl(url);
                 setStep(2);
             } else {
-                setMessage('没能在返回数据里找到 verification-link');
-                console.log("接口实际返回的内容:", rawText); // 方便在控制台排查
+                setMessage('没能在返回数据里找到验证链接');
             }
         } catch (err) {
-            setMessage('网络请求失败，请检查控制台');
+            setMessage('网络请求失败，请检查连接');
         } finally {
             setLoading(false);
         }
     };
 
-    // 第二步：绑完之后，提交数据库
+    // 步骤 2：用户点“我已完成”，去查询绑定的 WDID
+    const handleCheckBind = async () => {
+        setLoading(true);
+        setMessage('');
+
+        try {
+            const res = await fetch(`/api/query-bind?qq=${generatedQq}`);
+            const rawText = await res.text();
+            
+            let fetchedWdid = '';
+            
+            try {
+                const data = JSON.parse(rawText);
+                // 自动尝试匹配常见的字段名，如果接口直接返回 {"wdid": "xxx"} 或 {"user": "xxx"}
+                fetchedWdid = data.wdid || data.user || data.username || data.account || data.data || '';
+            } catch (err) {
+                // 如果接口直接返回纯文本的 WDID
+                fetchedWdid = rawText.trim();
+            }
+
+            // 简单过滤一下，防止接口返回 "false" 或 "error" 之类的没绑上的提示
+            if (fetchedWdid && !fetchedWdid.toLowerCase().includes('error') && fetchedWdid !== 'false' && fetchedWdid !== 'null') {
+                setWdid(fetchedWdid);
+                setStep(3); // 查到了，进入确认环节
+            } else {
+                setMessage('还没查到你的绑定信息，是不是还没在 Wikidot 上操作完？');
+            }
+        } catch (err) {
+            setMessage('查询绑定状态失败了，稍后再试一下');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // 步骤 3：确认 WDID 没错，正式入库
     const handleFinalSubmit = async () => {
         setLoading(true);
         setMessage('');
@@ -75,7 +111,8 @@ export default function Register() {
             const res = await fetch('/api/register', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(formData)
+                // 把查到的 wdid 也一起发给后端存起来
+                body: JSON.stringify({ ...formData, wikidotAccount: wdid })
             });
             
             if (res.ok) {
@@ -89,7 +126,7 @@ export default function Register() {
                 setMessage(data.error || '存入数据库时失败了');
             }
         } catch (err) {
-            setMessage('提交失败，后端可能挂了');
+            setMessage('提交失败，后端可能没有响应');
         } finally {
             setLoading(false);
         }
@@ -110,9 +147,9 @@ export default function Register() {
                     </div>
                 )}
                 
-                <form onSubmit={step === 1 ? handleRegisterStart : (e) => e.preventDefault()} className="space-y-4">
+                <div className="space-y-4">
                     {step === 1 && (
-                        <>
+                        <form onSubmit={handleRegisterStart} className="space-y-4">
                             <div>
                                 <label className="block text-sm font-medium text-gray-400 mb-1">显示名称</label>
                                 <input 
@@ -142,7 +179,7 @@ export default function Register() {
                             >
                                 {loading ? '正在获取...' : '注册并验证 Wikidot'}
                             </button>
-                        </>
+                        </form>
                     )}
 
                     {step === 2 && (
@@ -162,11 +199,11 @@ export default function Register() {
                             
                             <button 
                                 type="button" 
-                                onClick={handleFinalSubmit} 
+                                onClick={handleCheckBind} 
                                 disabled={loading}
                                 className="w-full py-2.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
                             >
-                                {loading ? '正在写入数据库...' : '我已完成绑定，确认注册'}
+                                {loading ? '正在查询...' : '我已完成绑定'}
                             </button>
 
                             <button 
@@ -178,7 +215,35 @@ export default function Register() {
                             </button>
                         </div>
                     )}
-                </form>
+
+                    {step === 3 && (
+                        <div className="p-4 bg-gray-900/50 border border-gray-600 rounded-lg space-y-5">
+                            <div className="text-center">
+                                <div className="text-gray-400 text-sm mb-2">已读取到您的 Wikidot 账号：</div>
+                                <div className="text-xl font-bold text-indigo-400 bg-gray-900 py-2 rounded border border-gray-700">
+                                    {wdid}
+                                </div>
+                            </div>
+                            
+                            <button 
+                                type="button" 
+                                onClick={handleFinalSubmit} 
+                                disabled={loading}
+                                className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+                            >
+                                {loading ? '正在写入数据库...' : '确认无误，完成注册'}
+                            </button>
+
+                            <button 
+                                type="button" 
+                                onClick={() => setStep(2)} 
+                                className="w-full py-2 text-gray-400 hover:text-white text-sm transition-colors mt-2"
+                            >
+                                账号不对？重新验证
+                            </button>
+                        </div>
+                    )}
+                </div>
             </div>
         </div>
     );
