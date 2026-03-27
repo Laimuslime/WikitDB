@@ -20,9 +20,8 @@ export default function Register() {
     const handleSubmit = async (e) => {
         e.preventDefault();
         
-        // 检查前端这边的输入是不是空的
         if (!formData.username || !formData.email || !formData.password) {
-            setMessage('麻烦把信息填全');
+            setMessage('请将信息填写完整');
             return;
         }
 
@@ -30,7 +29,6 @@ export default function Register() {
         setMessage('');
 
         try {
-            // 发给后端的注册接口
             const res = await fetch('/api/register', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -45,10 +43,10 @@ export default function Register() {
                     router.push('/login');
                 }, 1500);
             } else {
-                setMessage(data.error || '注册出了点问题');
+                setMessage(data.error || '注册失败');
             }
         } catch (err) {
-            setMessage('网络好像不太行，再试一次吧');
+            setMessage('网络请求异常，请重试');
         } finally {
             setLoading(false);
         }
