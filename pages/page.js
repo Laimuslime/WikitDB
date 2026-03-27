@@ -28,21 +28,6 @@ ChartJS.register(
   Legend
 );
 
-const neonGlowPlugin = {
-    id: 'neonGlow',
-    beforeDatasetsDraw: (chart) => {
-        const ctx = chart.ctx;
-        ctx.save();
-        ctx.shadowColor = chart.data.datasets[0].borderColor;
-        ctx.shadowBlur = 15;
-        ctx.shadowOffsetX = 0;
-        ctx.shadowOffsetY = 0;
-    },
-    afterDatasetsDraw: (chart) => {
-        chart.ctx.restore();
-    }
-};
-
 const PageDetail = () => {
     const router = useRouter();
     const { site, page } = router.query;
@@ -147,7 +132,9 @@ const PageDetail = () => {
     }
 
     const isNegative = chartData.length > 0 && chartData[chartData.length - 1].score < 0;
-    const neonColor = isNegative ? 'rgba(239, 68, 68, 1)' : 'rgba(34, 197, 94, 1)';
+    const themeColor = isNegative ? 'rgba(248, 113, 113, 1)' : 'rgba(129, 140, 248, 1)';
+    const bgColorFallback = isNegative ? 'rgba(248, 113, 113, 0.2)' : 'rgba(129, 140, 248, 0.2)';
+    const grayColor = 'rgba(107, 114, 128, 1)';
 
     const lineChartData = {
         labels: chartData.map(d => d.date),
@@ -156,36 +143,41 @@ const PageDetail = () => {
                 fill: 'origin',
                 label: '页面评分',
                 data: chartData.map(d => d.score),
-                borderColor: neonColor,
+                borderColor: themeColor,
                 backgroundColor: (context) => {
                     const chart = context.chart;
                     const { ctx, chartArea, scales } = chart;
-                    if (!chartArea) return 'transparent';
+                    if (!chartArea) return bgColorFallback;
                     
                     const zeroY = scales.y.getPixelForValue(0);
                     const topY = chartArea.top;
                     const bottomY = chartArea.bottom;
+                    
                     const gradient = ctx.createLinearGradient(0, topY, 0, bottomY);
                     const zeroRatio = Math.max(0, Math.min(1, (zeroY - topY) / (bottomY - topY)));
                     
                     if (isNegative) {
-                        gradient.addColorStop(0, 'rgba(239, 68, 68, 0)');
-                        gradient.addColorStop(zeroRatio, 'rgba(239, 68, 68, 0)');
-                        gradient.addColorStop(1, 'rgba(239, 68, 68, 0.4)');
+                        gradient.addColorStop(0, 'rgba(248, 113, 113, 0)');
+                        gradient.addColorStop(zeroRatio, 'rgba(248, 113, 113, 0)');
+                        gradient.addColorStop(1, 'rgba(248, 113, 113, 0.5)');
                     } else {
-                        gradient.addColorStop(0, 'rgba(34, 197, 94, 0.4)');
-                        gradient.addColorStop(zeroRatio, 'rgba(34, 197, 94, 0)');
-                        gradient.addColorStop(1, 'rgba(34, 197, 94, 0)');
+                        gradient.addColorStop(0, 'rgba(129, 140, 248, 0.5)');
+                        gradient.addColorStop(zeroRatio, 'rgba(129, 140, 248, 0)');
+                        gradient.addColorStop(1, 'rgba(129, 140, 248, 0)');
                     }
                     return gradient;
                 },
                 borderWidth: 3,
-                tension: 0, 
-                stepped: true,
-                pointBackgroundColor: neonColor,
-                pointBorderColor: '#ffffff',
-                pointBorderWidth: 2,
-                pointRadius: 0, 
+                tension: 0.15,
+                stepped: false,
+                segment: {
+                    borderColor: ctx => ctx.p0DataIndex === 0 ? grayColor : themeColor,
+                    borderDash: ctx => ctx.p0DataIndex === 0 ? [6, 6] : undefined,
+                },
+                pointBackgroundColor: (ctx) => ctx.dataIndex === 0 ? grayColor : themeColor,
+                pointBorderColor: '#1F2937',
+                pointBorderWidth: 1.5,
+                pointRadius: 4,
                 pointHoverRadius: 6,
             }
         ]
@@ -205,11 +197,11 @@ const PageDetail = () => {
                     precision: 0, 
                     stepSize: 10, 
                     color: '#9CA3AF',
-                    font: { size: 12, family: 'monospace' }
+                    font: { size: 12 }
                 },
                 grid: {
-                    color: (context) => context.tick.value === 0 ? 'rgba(107, 114, 128, 0.5)' : 'rgba(55, 65, 81, 0.3)',
-                    borderDash: (context) => context.tick.value === 0 ? [] : [4, 4],
+                    color: (context) => context.tick.value === 0 ? '#4B5563' : '#374151',
+                    borderDash: (context) => context.tick.value === 0 ? [6, 6] : [4, 4],
                     drawBorder: false,
                 }
             },
@@ -217,7 +209,7 @@ const PageDetail = () => {
                 ticks: {
                     color: '#9CA3AF',
                     maxTicksLimit: 8,
-                    font: { size: 10, family: 'monospace' }
+                    font: { size: 10 }
                 },
                 grid: {
                     display: false
@@ -227,16 +219,13 @@ const PageDetail = () => {
         plugins: {
             legend: { display: false },
             tooltip: {
-                backgroundColor: 'rgba(17, 24, 39, 0.9)',
+                backgroundColor: '#111827',
                 titleColor: '#9CA3AF',
-                bodyColor: '#FFFFFF',
-                bodyFont: { family: 'monospace', size: 14, weight: 'bold' },
-                borderColor: neonColor,
+                bodyColor: '#E5E7EB',
+                borderColor: '#374151',
                 borderWidth: 1,
-                padding: 12,
+                padding: 10,
                 displayColors: false,
-                intersect: false,
-                mode: 'index',
                 callbacks: {
                     label: function(context) {
                         let val = context.parsed.y;
@@ -522,7 +511,7 @@ const PageDetail = () => {
                                         <i className="fa-solid fa-chart-line text-indigo-400"></i> 按日评分走势
                                     </h3>
                                     <div className="w-full h-[320px] relative">
-                                        <Line data={lineChartData} options={lineChartOptions} plugins={[neonGlowPlugin]} />
+                                        <Line data={lineChartData} options={lineChartOptions} />
                                     </div>
                                 </div>
                             ) : (
