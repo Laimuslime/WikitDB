@@ -8,9 +8,9 @@ export default async function handler(req, res) {
         return res.status(405).json({ error: '只接受 POST 请求' });
     }
 
-    const { username, email, password } = req.body;
+    const { username, wikidotAccount, email, password } = req.body;
 
-    if (!username || !email || !password) {
+    if (!username || !wikidotAccount || !email || !password) {
         return res.status(400).json({ error: '注册信息没填全' });
     }
 
@@ -22,8 +22,10 @@ export default async function handler(req, res) {
 
         const hashedPassword = await bcrypt.hash(password, 10);
 
+        // 将数据保存到 Redis
         await redis.set(`user:${username}`, {
             username,
+            wikidotAccount,
             email,
             password: hashedPassword,
             createdAt: Date.now()
@@ -31,7 +33,7 @@ export default async function handler(req, res) {
 
         res.status(200).json({ 
             message: '注册成功',
-            user: { username, email }
+            user: { username, wikidotAccount, email }
         });
 
     } catch (error) {
