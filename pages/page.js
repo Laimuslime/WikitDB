@@ -28,21 +28,6 @@ ChartJS.register(
   Legend
 );
 
-const neonGlowPlugin = {
-    id: 'neonGlow',
-    beforeDatasetsDraw: (chart) => {
-        const ctx = chart.ctx;
-        ctx.save();
-        ctx.shadowColor = chart.data.datasets[0].borderColor;
-        ctx.shadowBlur = 15;
-        ctx.shadowOffsetX = 0;
-        ctx.shadowOffsetY = 0;
-    },
-    afterDatasetsDraw: (chart) => {
-        chart.ctx.restore();
-    }
-};
-
 const PageDetail = () => {
     const router = useRouter();
     const { site, page } = router.query;
@@ -146,42 +131,37 @@ const PageDetail = () => {
         }
     }
 
-    const isNegative = chartData.length > 0 && chartData[chartData.length - 1].score < 0;
-    const neonColor = isNegative ? 'rgba(239, 68, 68, 1)' : 'rgba(34, 197, 94, 1)';
+    const colorRise = 'rgba(34, 197, 94, 1)'; 
+    const colorDrop = 'rgba(239, 68, 68, 1)'; 
+    const bgRise = 'rgba(34, 197, 94, 0.2)';
+    const bgDrop = 'rgba(239, 68, 68, 0.2)';
 
     const lineChartData = {
         labels: chartData.map(d => d.date),
         datasets: [
             {
-                fill: 'origin',
                 label: '页面评分',
                 data: chartData.map(d => d.score),
-                borderColor: neonColor,
-                backgroundColor: (context) => {
-                    const chart = context.chart;
-                    const { ctx, chartArea, scales } = chart;
-                    if (!chartArea) return 'transparent';
-                    
-                    const zeroY = scales.y.getPixelForValue(0);
-                    const topY = chartArea.top;
-                    const bottomY = chartArea.bottom;
-                    const gradient = ctx.createLinearGradient(0, topY, 0, bottomY);
-                    const zeroRatio = Math.max(0, Math.min(1, (zeroY - topY) / (bottomY - topY)));
-                    
-                    if (isNegative) {
-                        gradient.addColorStop(0, 'rgba(239, 68, 68, 0)');
-                        gradient.addColorStop(zeroRatio, 'rgba(239, 68, 68, 0)');
-                        gradient.addColorStop(1, 'rgba(239, 68, 68, 0.4)');
-                    } else {
-                        gradient.addColorStop(0, 'rgba(34, 197, 94, 0.4)');
-                        gradient.addColorStop(zeroRatio, 'rgba(34, 197, 94, 0)');
-                        gradient.addColorStop(1, 'rgba(34, 197, 94, 0)');
-                    }
-                    return gradient;
-                },
+                fill: 'origin',
                 borderWidth: 3,
-                tension: 0, 
-                pointBackgroundColor: neonColor,
+                tension: 0.4, 
+                stepped: false,
+                segment: {
+                    borderColor: ctx => {
+                        if (!ctx.p0 || !ctx.p1) return colorRise;
+                        return ctx.p1.parsed.y < ctx.p0.parsed.y ? colorDrop : colorRise;
+                    },
+                    backgroundColor: ctx => {
+                        if (!ctx.p0 || !ctx.p1) return bgRise;
+                        return ctx.p1.parsed.y < ctx.p0.parsed.y ? bgDrop : bgRise;
+                    }
+                },
+                pointBackgroundColor: (ctx) => {
+                    if (ctx.dataIndex === 0) return colorRise;
+                    const prev = chartData[ctx.dataIndex - 1].score;
+                    const curr = chartData[ctx.dataIndex].score;
+                    return curr < prev ? colorDrop : colorRise;
+                },
                 pointBorderColor: '#ffffff',
                 pointBorderWidth: 2,
                 pointRadius: 0, 
@@ -230,7 +210,14 @@ const PageDetail = () => {
                 titleColor: '#9CA3AF',
                 bodyColor: '#FFFFFF',
                 bodyFont: { family: 'monospace', size: 14, weight: 'bold' },
-                borderColor: neonColor,
+                borderColor: (context) => {
+                    if (!context.tooltip.dataPoints || context.tooltip.dataPoints.length === 0) return colorRise;
+                    const dataIndex = context.tooltip.dataPoints[0].dataIndex;
+                    if (dataIndex === 0) return colorRise;
+                    const prev = chartData[dataIndex - 1].score;
+                    const curr = chartData[dataIndex].score;
+                    return curr < prev ? colorDrop : colorRise;
+                },
                 borderWidth: 1,
                 padding: 12,
                 displayColors: false,
@@ -521,7 +508,7 @@ const PageDetail = () => {
                                         <i className="fa-solid fa-chart-line text-indigo-400"></i> 按日评分走势
                                     </h3>
                                     <div className="w-full h-[320px] relative">
-                                        <Line data={lineChartData} options={lineChartOptions} plugins={[neonGlowPlugin]} />
+                                        <Line data={lineChartData} options={lineChartOptions} />
                                     </div>
                                 </div>
                             ) : (
