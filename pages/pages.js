@@ -81,7 +81,7 @@ const Pages = () => {
                     ))}
                 </div>
 
-                <div className="bg-gray-800/50 rounded-xl p-6 border border-white/10 min-h-[400px]">
+                <div className="bg-gray-800/50 rounded-xl p-6 border border-white/10 min-h-[500px]">
                     <form onSubmit={handleSearchSubmit} className="mb-8 relative max-w-2xl mx-auto">
                         <div className="relative">
                             <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">

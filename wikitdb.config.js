@@ -4,15 +4,15 @@ module.exports = {
     SITE_SINCE: '2026',
     SITE_AUTHOR: 'WikitDB Team',
     SUPPORT_WIKI: [
-/*站点添加格式
+   /*站点格式
         {
             NAME: "站点名称",
             URL: "站点链接",
-            ImgURL: "站点Logo链接",
-            PARAM: "站点简写",
+            ImgURL: "Logo链接",
+            PARAM: "简写",
             WIKIT_ID: "Wikit站点里写的站点名称，这里用于筛选作者的站点页面"
         },
-        */
+    */
     {
             NAME: "深林文学部",
             URL: "https://deep-forest-club.wikidot.com/",

@@ -40,8 +40,8 @@ const Header = () => {
             <div className="mx-auto max-w-7xl px-2 sm:px-6 lg:px-8">
                 <div className="relative flex h-16 items-center justify-between">
                     <div className="absolute inset-y-0 left-0 flex items-center sm:hidden">
-                        <button 
-                            type="button" 
+                        <button
+                            type="button"
                             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
                             className="relative inline-flex items-center justify-center rounded-md p-2 text-gray-400 hover:bg-white/5 hover:text-white"
                         >
@@ -65,10 +65,18 @@ const Header = () => {
                         </a>
                         <div className="hidden sm:ml-6 sm:block">
                             <div className="flex space-x-4 items-center h-full">
-                                <a href="/pages" className="rounded-md px-3 py-2 text-sm font-medium text-gray-300 hover:bg-white/5 hover:text-white">页面</a>
-                                <a href="/authors" className="rounded-md px-3 py-2 text-sm font-medium text-gray-300 hover:bg-white/5 hover:text-white">作者</a>
-                                <a href="/tools" className="rounded-md px-3 py-2 text-sm font-medium text-gray-300 hover:bg-white/5 hover:text-white">工具</a>
-                                <a href="/about" className="rounded-md px-3 py-2 text-sm font-medium text-gray-300 hover:bg-white/5 hover:text-white">关于</a>
+                                <a href="/pages" className="rounded-md px-3 py-2 text-sm font-medium text-gray-300 hover:bg-white/5 hover:text-white">
+                                    <i className="fa-solid fa-file"></i> 页面
+                                </a>
+                                <a href="/authors" className="rounded-md px-3 py-2 text-sm font-medium text-gray-300 hover:bg-white/5 hover:text-white">
+                                    <i className="fa-solid fa-user"></i> 作者
+                                </a>
+                                <a href="/tools" className="rounded-md px-3 py-2 text-sm font-medium text-gray-300 hover:bg-white/5 hover:text-white">
+                                    <i className="fa-solid fa-toolbox"></i> 工具
+                                </a>
+                                <a href="/about" className="rounded-md px-3 py-2 text-sm font-medium text-gray-300 hover:bg-white/5 hover:text-white">
+                                    <i className="fa-solid fa-circle-info"></i> 关于
+                                </a>
                             </div>
                         </div>
                     </div>
@@ -78,7 +86,7 @@ const Header = () => {
                         {username ? (
                             <>
                                 <span className="text-sm font-medium text-gray-300">{username}</span>
-                                <button 
+                                <button
                                     onClick={handleLogout}
                                     className="rounded-md bg-gray-700 px-3 py-2 text-sm font-medium text-gray-300 hover:bg-gray-600 transition-colors"
                                 >
@@ -112,13 +120,13 @@ const Header = () => {
                             <i className="fa-solid fa-circle-info"></i> 关于
                         </a>
                     </div>
-                    
+
                     {/* 移动端登录/注册区域 */}
                     <div className="mt-4 border-t border-gray-700 pt-4 pb-2">
                         {username ? (
                             <div className="flex items-center justify-between px-3">
                                 <span className="text-sm font-medium text-gray-300">当前用户：{username}</span>
-                                <button 
+                                <button
                                     onClick={handleLogout}
                                     className="rounded-md bg-gray-700 px-3 py-2 text-sm font-medium text-gray-300 hover:bg-gray-600 transition-colors"
                                 >
