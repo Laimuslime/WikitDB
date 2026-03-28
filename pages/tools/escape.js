@@ -1,6 +1,7 @@
 // pages/tools/escape.js
 import React, { useState, useEffect, useRef } from 'react';
 import Head from 'next/head';
+const config = require('../../wikitdb.config.js');
 
 export default function CodeEscape() {
     const [gameState, setGameState] = useState('idle');
@@ -27,11 +28,23 @@ export default function CodeEscape() {
     const startRandomEscape = async () => {
         setGameState('loading');
         try {
-            // 先去 GraphQL 拉取最近的 50 个页面作为随机池
+            // 1. 从你的配置文件里随机挑一个支持的站点，避免跨域和未配置报错
+            const wikis = config.SUPPORT_WIKI || config.SUPPOST_WIKI || [];
+            if (wikis.length === 0) throw new Error('没有配置支持的站点');
+            
+            const randomWikiConfig = wikis[Math.floor(Math.random() * wikis.length)];
+            let actualWikiName = '';
+            try {
+                actualWikiName = new URL(randomWikiConfig.URL).hostname.replace(/^www\./i, '').split('.')[0];
+            } catch (e) {
+                actualWikiName = randomWikiConfig.URL.replace(/^https?:\/\//i, '').replace(/^www\./i, '').split('.')[0];
+            }
+
+            // 2. 只在这个站点里随机抽 50 个最新页面
             const query = {
                 query: `
                     query {
-                        articles(page: 1, pageSize: 50) {
+                        articles(wiki: "${actualWikiName}", page: 1, pageSize: 50) {
                             nodes {
                                 wiki
                                 page
@@ -41,6 +54,7 @@ export default function CodeEscape() {
                     }
                 `
             };
+            
             const res = await fetch('https://wikit.unitreaty.org/apiv1/graphql', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -49,13 +63,13 @@ export default function CodeEscape() {
             const result = await res.json();
             const nodes = result.data?.articles?.nodes || [];
 
-            if (nodes.length === 0) throw new Error('没有获取到页面列表');
+            if (nodes.length === 0) throw new Error('该站点没有获取到页面');
 
             const randomNode = nodes[Math.floor(Math.random() * nodes.length)];
             setTargetPage(randomNode);
 
-            // 调用你的源码接口拉取真实代码
-            const sourceRes = await fetch(`/api/source?site=${randomNode.wiki}&page=${encodeURIComponent(randomNode.page)}`);
+            // 3. 关键修复：使用 config 里的 PARAM 去请求你的 api/source
+            const sourceRes = await fetch(`/api/source?site=${randomWikiConfig.PARAM}&page=${encodeURIComponent(randomNode.page)}`);
             const sourceData = await sourceRes.json();
 
             if (!sourceRes.ok || !sourceData.sourceCode) {
@@ -64,22 +78,25 @@ export default function CodeEscape() {
 
             const fullCode = sourceData.sourceCode;
             
-            // 找一段包含维基语法的片段，截取 400 个字符左右，不然代码太长没法玩
+            // 4. 截取片段并制造破坏
             let startIndex = fullCode.indexOf('[[');
-            if (startIndex === -1 || startIndex > fullCode.length - 400) {
-                startIndex = 0;
+            if (startIndex === -1) startIndex = 0;
+            // 防止代码太短截取越界
+            if (startIndex + 400 > fullCode.length) {
+                startIndex = Math.max(0, fullCode.length - 400);
             }
             const snippet = fullCode.substring(startIndex, startIndex + 400);
 
-            // 制造代码损坏
             let damaged = snippet;
-            damaged = damaged.replace('[[div', '[div');
-            damaged = damaged.replace('[[/div]]', '[/div]');
-            damaged = damaged.replace('[[module', '[module');
-            damaged = damaged.replace('**', '*');
-
-            // 如果替换后没有任何变化，说明这段代码没有上述标签，直接删掉一个右括号作为兜底
-            if (damaged === snippet) {
+            let errorCount = 0;
+            
+            if (damaged.includes('[[div')) { damaged = damaged.replace('[[div', '[div'); errorCount++; }
+            if (damaged.includes('[[/div]]')) { damaged = damaged.replace('[[/div]]', '[/div]'); errorCount++; }
+            if (damaged.includes('**')) { damaged = damaged.replace('**', '*'); errorCount++; }
+            if (damaged.includes('[[module')) { damaged = damaged.replace('[[module', '[modul'); errorCount++; }
+            
+            // 兜底：如果上面的标签都没匹配到，强行弄坏一个右括号
+            if (errorCount === 0 && damaged.includes(']]')) {
                 damaged = damaged.replace(']]', ']');
             }
 
@@ -89,6 +106,7 @@ export default function CodeEscape() {
             setGameState('playing');
 
         } catch (err) {
+            console.error(err);
             alert('随机抽取异常代码失败，请重试');
             setGameState('idle');
         }
@@ -97,12 +115,11 @@ export default function CodeEscape() {
     const handleVerify = () => {
         if (gameState !== 'playing') return;
 
-        // 去掉首尾空格后精确对比
         if (userCode.trim() === originalCode.trim()) {
             setGameState('success');
             setScore(prev => prev + 100 + timeLeft * 2);
         } else {
-            // 提交错误直接扣除 10 秒
+            // 错误提交直接扣 10 秒
             setTimeLeft(prev => Math.max(0, prev - 10));
         }
     };
@@ -121,6 +138,7 @@ export default function CodeEscape() {
             <div className="flex flex-col gap-6">
                 <div className="border-b border-gray-800 pb-4">
                     <h1 className="text-3xl font-bold text-red-500 tracking-tight">
+                        <i className="fa-solid fa-triangle-exclamation mr-3"></i>
                         异常突破：代码修复逃脱
                     </h1>
                     <p className="mt-2 text-gray-400 text-sm">
@@ -131,7 +149,7 @@ export default function CodeEscape() {
                 {gameState === 'idle' && (
                     <div className="bg-gray-800/40 border border-gray-700 rounded-xl p-8 text-center mt-4 max-w-2xl mx-auto w-full">
                         <div className="text-red-500 text-6xl mb-6">
-                            WIKIT DB
+                            <i className="fa-solid fa-server"></i>
                         </div>
                         <h2 className="text-2xl font-bold text-white mb-4">准备接入随机代码段</h2>
                         <p className="text-gray-400 mb-8">
@@ -149,10 +167,10 @@ export default function CodeEscape() {
                 {gameState === 'loading' && (
                     <div className="bg-gray-800/40 border border-gray-700 rounded-xl p-12 text-center mt-4 max-w-2xl mx-auto w-full">
                         <div className="text-blue-500 text-4xl mb-4 animate-spin">
-                            O
+                            <i className="fa-solid fa-circle-notch"></i>
                         </div>
                         <div className="text-blue-400 font-mono tracking-widest animate-pulse">
-                            正在全球数据库中随机定位异常页面...
+                            正在全球数据库中随机定位异常页面并劫持源码...
                         </div>
                     </div>
                 )}
@@ -180,7 +198,7 @@ export default function CodeEscape() {
                             <textarea 
                                 value={userCode}
                                 onChange={(e) => setUserCode(e.target.value)}
-                                className="w-full h-80 bg-[#1e1e1e] text-gray-300 font-mono text-sm p-4 rounded-lg border border-gray-700 focus:outline-none focus:border-blue-500 resize-none"
+                                className="w-full h-80 bg-[#1e1e1e] text-gray-300 font-mono text-sm p-4 rounded-lg border border-gray-700 focus:outline-none focus:border-blue-500 resize-none leading-relaxed"
                                 spellCheck="false"
                             />
                         </div>
@@ -205,11 +223,11 @@ export default function CodeEscape() {
                 {gameState === 'success' && (
                     <div className="bg-green-900/20 border border-green-500/30 p-8 rounded-xl text-center flex flex-col items-center mt-4">
                         <div className="text-green-500 text-5xl mb-4">
-                            V
+                            <i className="fa-solid fa-check-circle"></i>
                         </div>
                         <h2 className="text-2xl font-bold text-white mb-2">隔离门已重启</h2>
                         <p className="text-gray-400 mb-6">
-                            你成功修复了 <span className="text-white">{targetPage?.title}</span> 的片段并阻止了收容失效。该次操作得分为：<span className="text-green-400 font-bold">{score}</span>
+                            你成功修复了 <span className="text-white font-bold">{targetPage?.title}</span> 的受损片段并阻止了收容失效。本次操作得分：<span className="text-green-400 font-bold text-xl">{score}</span>
                         </p>
                         <div className="flex gap-4">
                             <button 
@@ -220,7 +238,7 @@ export default function CodeEscape() {
                             </button>
                             <button 
                                 onClick={startRandomEscape}
-                                className="px-6 py-2.5 bg-green-600 hover:bg-green-500 text-white font-bold rounded-lg transition-colors"
+                                className="px-6 py-2.5 bg-green-600 hover:bg-green-500 text-white font-bold rounded-lg transition-colors shadow-lg"
                             >
                                 继续处理下一份档案
                             </button>
@@ -231,14 +249,14 @@ export default function CodeEscape() {
                 {gameState === 'fail' && (
                     <div className="bg-red-900/20 border border-red-500/30 p-8 rounded-xl text-center flex flex-col items-center mt-4">
                         <div className="text-red-500 text-5xl mb-4">
-                            X
+                            <i className="fa-solid fa-skull-crossbones"></i>
                         </div>
                         <h2 className="text-2xl font-bold text-white mb-2">收容失效</h2>
                         <p className="text-gray-400 mb-6">倒计时结束，这部分异常代码已彻底崩溃。</p>
                         <div className="flex gap-4">
                             <button 
                                 onClick={startRandomEscape}
-                                className="px-6 py-2.5 bg-red-600 hover:bg-red-500 text-white font-bold rounded-lg transition-colors"
+                                className="px-6 py-2.5 bg-red-600 hover:bg-red-500 text-white font-bold rounded-lg transition-colors shadow-lg"
                             >
                                 抽取新档案重试
                             </button>
