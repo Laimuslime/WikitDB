@@ -1,25 +1,20 @@
 // pages/tools/quality-judge.js
 import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
-import Layout from '../../components/Layout';
 
 export default function QualityJudge() {
-    // 交易标的和基础状态
     const [recentPages, setRecentPages] = useState([]);
     const [selectedPage, setSelectedPage] = useState(null);
     
-    // 对应你的 API 接口字段
-    const [username, setUsername] = useState('Laimu_slime'); // 临时替代登录态
-    const [direction, setDirection] = useState('long'); // 做多(long)或做空(short)
+    const [username, setUsername] = useState('Laimu_slime');
+    const [direction, setDirection] = useState('long');
     const [margin, setMargin] = useState(100);
     const [leverage, setLeverage] = useState(1);
     const [lockType, setLockType] = useState('none');
 
-    // 交互反馈
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [message, setMessage] = useState('');
 
-    // 页面加载时去 GraphQL 拉一下最近的页面数据供用户选择
     useEffect(() => {
         const fetchRecentPages = async () => {
             try {
@@ -53,7 +48,6 @@ export default function QualityJudge() {
         fetchRecentPages();
     }, []);
 
-    // 提交开仓表单到你的后端接口
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (!selectedPage) {
@@ -95,7 +89,7 @@ export default function QualityJudge() {
     };
 
     return (
-        <Layout>
+        <>
             <Head>
                 <title>页面质量评断 (打新) - WikitDB</title>
             </Head>
@@ -107,7 +101,6 @@ export default function QualityJudge() {
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                    {/* 左侧：选择标的 */}
                     <div className="bg-gray-800/40 rounded-xl border border-gray-700 p-6">
                         <h2 className="text-xl font-semibold text-white mb-4">第一步：选择标的页面</h2>
                         <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2">
@@ -135,7 +128,6 @@ export default function QualityJudge() {
                         </div>
                     </div>
 
-                    {/* 右侧：交易表单 */}
                     <div className="bg-gray-800/40 rounded-xl border border-gray-700 p-6">
                         <h2 className="text-xl font-semibold text-white mb-4">第二步：设置仓位参数</h2>
                         <form onSubmit={handleSubmit} className="space-y-5">
@@ -221,6 +213,6 @@ export default function QualityJudge() {
                     </div>
                 </div>
             </div>
-        </Layout>
+        </>
     );
 }
