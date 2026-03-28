@@ -49,7 +49,7 @@ export default async function handler(req, res) {
                     // 对比 comment 字段
                     if (rev.comment && rev.comment.trim() === tempRecord.verifyCode) {
                         // 匹配成功，提取 API 中的 user 字段 (从你的新图确认字段名为 user)
-                        wdid = rev.user;
+                        wdid = rev.username;
                         break;
                     }
                 }
