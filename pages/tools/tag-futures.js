@@ -5,7 +5,6 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianG
 
 const TAGS = ['原创', '翻译', '搞笑', '微恐', '设定中心', '人事档案'];
 
-// 配合暗色模式的悬浮框
 const CustomTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
         return (
@@ -23,13 +22,32 @@ const CustomTooltip = ({ active, payload, label }) => {
 export default function TagFutures() {
     const [selectedTag, setSelectedTag] = useState(TAGS[0]);
     const [chartData, setChartData] = useState([]);
-    const [username, setUsername] = useState('Laimu_slime');
+    
+    const [username, setUsername] = useState(null);
+    const [userBalance, setUserBalance] = useState(0);
+
     const [direction, setDirection] = useState('long');
     const [margin, setMargin] = useState(100);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [message, setMessage] = useState('');
 
-    // 每次切换标签，根据伪随机算法生成一条走势线
+    useEffect(() => {
+        const storedUsername = localStorage.getItem('username');
+        if (storedUsername) {
+            setUsername(storedUsername);
+            fetch('/api/trade/author', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: storedUsername, authorName: 'System', action: 'query' })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if(data.newBalance !== undefined) setUserBalance(data.newBalance);
+            })
+            .catch(console.error);
+        }
+    }, []);
+
     useEffect(() => {
         let basePrice = 50 + (TAGS.indexOf(selectedTag) * 15);
         const data = [];
@@ -38,8 +56,6 @@ export default function TagFutures() {
         for (let i = 30; i >= 0; i--) {
             const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
             const dateStr = `${date.getMonth() + 1}/${date.getDate()}`;
-            
-            // 制造随波逐流的震荡感
             const change = (Math.random() - 0.45) * 8; 
             basePrice = Math.max(5, basePrice + change);
             
@@ -54,11 +70,15 @@ export default function TagFutures() {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        if (!username) {
+            setMessage('请先登录后再进行交易！');
+            return;
+        }
+
         setIsSubmitting(true);
         setMessage('');
 
         try {
-            // 复用你之前的通用开仓接口
             const res = await fetch('/api/trade/open', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -79,7 +99,8 @@ export default function TagFutures() {
             if (!res.ok) {
                 setMessage(data.error || '下单失败');
             } else {
-                setMessage(`下单成功！流水号: ${data.tradeId}，余额: ¥${data.newBalance.toFixed(2)}`);
+                setUserBalance(data.newBalance);
+                setMessage(`下单成功！流水号: ${data.tradeId}`);
             }
         } catch (error) {
             setMessage('网络错误，请检查接口');
@@ -95,13 +116,26 @@ export default function TagFutures() {
             </Head>
 
             <div className="flex flex-col gap-6">
-                <div className="border-b border-gray-800 pb-4">
-                    <h1 className="text-3xl font-bold text-white tracking-tight">标签/设定大宗商品期货</h1>
-                    <p className="mt-2 text-gray-400 text-sm">将维基常见标签作为大宗商品，押注某种创作风格在未来的热度走向。</p>
+                <div className="flex justify-between items-end border-b border-gray-800 pb-4">
+                    <div>
+                        <h1 className="text-3xl font-bold text-white tracking-tight">标签/设定大宗商品期货</h1>
+                        <p className="mt-2 text-gray-400 text-sm">将维基常见标签作为大宗商品，押注某种创作风格在未来的热度走向。</p>
+                    </div>
+                    <div className="text-right hidden md:block">
+                        {username ? (
+                            <>
+                                <div className="text-gray-400 text-sm">操作账户: <span className="text-gray-200">{username}</span></div>
+                                <div className="text-2xl font-mono text-yellow-500">¥{userBalance.toFixed(2)}</div>
+                            </>
+                        ) : (
+                            <div className="text-red-400 font-bold border border-red-900/50 bg-red-900/20 px-4 py-2 rounded-lg">
+                                未登录，请先在顶栏登录
+                            </div>
+                        )}
+                    </div>
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                    {/* 左侧选择与大盘图 */}
                     <div className="lg:col-span-3 flex flex-col gap-4">
                         <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar">
                             {TAGS.map(tag => (
@@ -114,7 +148,6 @@ export default function TagFutures() {
                                         : 'bg-gray-800/60 text-gray-400 hover:bg-gray-700'
                                     }`}
                                 >
-                                    <i className="fa-solid fa-tag mr-2 text-sm opacity-70"></i>
                                     {tag}
                                 </button>
                             ))}
@@ -140,7 +173,6 @@ export default function TagFutures() {
                         </div>
                     </div>
 
-                    {/* 右侧交易终端 */}
                     <div className="lg:col-span-1 bg-gray-800/40 rounded-xl border border-gray-700 p-6 flex flex-col h-full shadow-lg">
                         <h2 className="text-xl font-bold text-white mb-6 border-b border-gray-700 pb-2">建仓面板</h2>
                         
@@ -152,16 +184,6 @@ export default function TagFutures() {
                         </div>
 
                         <form onSubmit={handleSubmit} className="space-y-4 flex-1 flex flex-col">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-400 mb-1">交易账户</label>
-                                <input 
-                                    type="text" 
-                                    value={username}
-                                    onChange={(e) => setUsername(e.target.value)}
-                                    className="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-yellow-500"
-                                />
-                            </div>
-
                             <div>
                                 <label className="block text-sm font-medium text-gray-400 mb-1">行情预测</label>
                                 <select 
@@ -181,18 +203,20 @@ export default function TagFutures() {
                                     min="1"
                                     value={margin}
                                     onChange={(e) => setMargin(e.target.value)}
-                                    className="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-2 text-white font-mono focus:outline-none focus:border-yellow-500"
+                                    disabled={!username}
+                                    className="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-2 text-white font-mono focus:outline-none focus:border-yellow-500 disabled:bg-gray-800 disabled:text-gray-500"
                                 />
                             </div>
 
                             <button 
                                 type="submit"
-                                disabled={isSubmitting}
+                                disabled={isSubmitting || !username}
                                 className={`w-full py-3 rounded-lg font-bold text-white mt-auto transition-colors shadow-lg ${
-                                    isSubmitting ? 'bg-gray-600' : 'bg-yellow-600 hover:bg-yellow-500'
+                                    !username ? 'bg-gray-700 text-gray-500 cursor-not-allowed' :
+                                    isSubmitting ? 'bg-gray-600 cursor-not-allowed' : 'bg-yellow-600 hover:bg-yellow-500'
                                 }`}
                             >
-                                {isSubmitting ? '正在处理...' : '确认开出合约'}
+                                {!username ? '未登录' : isSubmitting ? '正在处理...' : '确认开出合约'}
                             </button>
                         </form>
 
