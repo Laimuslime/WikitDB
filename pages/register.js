@@ -1,263 +1,176 @@
+// pages/register.js
 import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 
 export default function Register() {
     const router = useRouter();
-    const [formData, setFormData] = useState({ username: '', password: '' });
-    const [message, setMessage] = useState('');
-    const [loading, setLoading] = useState(false);
+    const [username, setUsername] = useState('');
+    const [password, setPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
     
-    const [step, setStep] = useState(1);
-    const [verifyUrl, setVerifyUrl] = useState('');
-    const [wdid, setWdid] = useState(''); 
+    // 新增：验证相关状态
+    const [step, setStep] = useState(1); // 1: 填账号密码 2: 编辑验证
+    const [verifyCode, setVerifyCode] = useState('');
+    const [isVerifying, setIsVerifying] = useState(false);
+    
+    const [error, setError] = useState('');
+    const [success, setSuccess] = useState('');
 
-    // 恢复界面的状态（不管怎么刷新，只靠用户名去后端找）
-    useEffect(() => {
-        const sessionStr = localStorage.getItem('wikit_reg_ui_state');
-        if (sessionStr) {
-            try {
-                const state = JSON.parse(sessionStr);
-                setFormData({ username: state.username, password: '' });
-                setVerifyUrl(state.verifyUrl || '');
-                setWdid(state.wdid || '');
-                setStep(state.step || 1);
-            } catch (e) {
-                localStorage.removeItem('wikit_reg_ui_state');
-            }
-        }
-    }, []);
-
-    const saveState = (newState) => {
-        localStorage.setItem('wikit_reg_ui_state', JSON.stringify(newState));
-    };
-
-    const handleChange = (e) => {
-        const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
-    };
-
-    const handleRegisterStart = async (e) => {
+    // 点击第一步的“下一步”生成验证码
+    const handleNextStep = (e) => {
         e.preventDefault();
+        setError('');
         
-        if (!formData.username || !formData.password) {
-            setMessage('名字和密码都要写全');
+        if (!username || !password) {
+            setError('请填写用户名和密码');
+            return;
+        }
+        if (password !== confirmPassword) {
+            setError('两次输入的密码不一致');
             return;
         }
 
-        setLoading(true);
-        setMessage('');
+        // 生成一个 6 位随机验证码
+        const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+        setVerifyCode(`WIKIT-${code}`);
+        setStep(2);
+    };
 
+    // 点击第二步的“完成验证”
+    const handleVerifyAndRegister = async () => {
+        setIsVerifying(true);
+        setError('');
+        
         try {
             const res = await fetch('/api/register', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
-                    action: 'start', 
-                    username: formData.username, 
-                    password: formData.password 
+                    username, 
+                    password,
+                    verifyCode // 把生成的验证码传给后端查记录
                 })
             });
 
             const data = await res.json();
 
-            if (res.ok && data.verifyUrl) {
-                setVerifyUrl(data.verifyUrl);
-                setStep(2);
-                saveState({ username: formData.username, step: 2, verifyUrl: data.verifyUrl });
+            if (!res.ok) {
+                setError(data.error || '验证失败，请重试');
             } else {
-                setMessage(data.error || '获取链接失败');
-            }
-        } catch (err) {
-            setMessage('网络请求失败，请检查连接');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleCheckBind = async () => {
-        setLoading(true);
-        setMessage('');
-
-        try {
-            const res = await fetch('/api/register', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    action: 'check', 
-                    username: formData.username 
-                })
-            });
-            
-            const data = await res.json();
-
-            if (res.ok && data.wdid) {
-                setWdid(data.wdid);
-                setStep(3);
-                saveState({ username: formData.username, step: 3, verifyUrl, wdid: data.wdid });
-            } else {
-                setMessage(data.error || '查询绑定状态失败了，稍后再试一下');
-            }
-        } catch (err) {
-            setMessage('服务器通信失败，稍后再试一下');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleFinalSubmit = async () => {
-        setLoading(true);
-        setMessage('');
-
-        try {
-            const res = await fetch('/api/register', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    action: 'submit', 
-                    username: formData.username 
-                })
-            });
-            
-            if (res.ok) {
-                localStorage.removeItem('wikit_reg_ui_state');
-                localStorage.setItem('username', formData.username);
-                
-                setMessage('注册成功！正在进入首页...');
+                setSuccess(`验证成功！已绑定 Wikidot 账号：${data.wikidotUser}`);
                 setTimeout(() => {
-                    router.push('/');
-                }, 1000);
-            } else {
-                const data = await res.json();
-                setMessage(data.error || '存入数据库时失败了');
+                    router.push('/login');
+                }, 2000);
             }
         } catch (err) {
-            setMessage('提交失败，后端可能没有响应');
+            setError('网络错误，请稍后再试');
         } finally {
-            setLoading(false);
+            setIsVerifying(false);
         }
-    };
-
-    const handleReset = () => {
-        localStorage.removeItem('wikit_reg_ui_state');
-        setStep(1);
-        setVerifyUrl('');
-        setWdid('');
-        setMessage('');
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-900 py-12 px-4">
+        <div className="min-h-screen flex items-center justify-center p-4">
             <Head>
-                <title>注册账号 - WikitDB</title>
+                <title>注册 - WikitDB</title>
             </Head>
-            
-            <div className="bg-gray-800 p-8 rounded-xl border border-gray-700 w-full max-w-md shadow-2xl">
-                <h1 className="text-2xl font-bold text-white mb-6 text-center">注册新账号</h1>
-                
-                {message && (
-                    <div className="mb-4 p-3 rounded bg-gray-700/50 text-gray-300 text-sm text-center border border-gray-600">
-                        {message}
+
+            <div className="w-full max-w-md bg-gray-800/40 border border-gray-700 rounded-xl p-8 shadow-2xl relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+                <div className="text-center mb-8">
+                    <h1 className="text-3xl font-bold text-white mb-2">加入控制网</h1>
+                    <p className="text-gray-400 text-sm">注册 WikitDB 档案库</p>
+                </div>
+
+                {error && (
+                    <div className="bg-red-900/30 border border-red-800/50 text-red-400 p-3 rounded-lg text-sm mb-6 text-center">
+                        {error}
                     </div>
                 )}
-                
-                <div className="space-y-4">
-                    {step === 1 && (
-                        <form onSubmit={handleRegisterStart} className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-400 mb-1">显示名称</label>
-                                <input 
-                                    type="text" 
-                                    name="username" 
-                                    value={formData.username} 
-                                    onChange={handleChange} 
-                                    className="w-full bg-gray-900 border border-gray-600 text-white text-sm rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-indigo-500 transition-all" 
-                                />
-                            </div>
-                            
-                            <div>
-                                <label className="block text-sm font-medium text-gray-400 mb-1">登录密码</label>
-                                <input 
-                                    type="password" 
-                                    name="password" 
-                                    value={formData.password} 
-                                    onChange={handleChange} 
-                                    className="w-full bg-gray-900 border border-gray-600 text-white text-sm rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-indigo-500 transition-all" 
-                                />
-                            </div>
-                            
-                            <button 
-                                type="submit" 
-                                disabled={loading} 
-                                className="w-full text-white bg-indigo-600 hover:bg-indigo-700 font-medium rounded-lg text-sm px-5 py-2.5 mt-6 transition-all disabled:opacity-50"
-                            >
-                                {loading ? '正在获取...' : '注册并验证 Wikidot'}
-                            </button>
-                        </form>
-                    )}
+                {success && (
+                    <div className="bg-green-900/30 border border-green-800/50 text-green-400 p-3 rounded-lg text-sm mb-6 text-center">
+                        {success}
+                    </div>
+                )}
 
-                    {step === 2 && (
-                        <div className="p-4 bg-gray-900/50 border border-gray-600 rounded-lg space-y-4">
-                            <p className="text-sm text-gray-300 leading-relaxed text-center">
-                                验证链接已生成。请前往 Wikidot 完成授权绑定。
-                            </p>
-                            
-                            <a 
-                                href={verifyUrl} 
-                                target="_blank" 
-                                rel="noopener noreferrer"
-                                className="block w-full py-2.5 text-center bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
-                            >
-                                前往授权页
-                            </a>
-                            
-                            <button 
-                                type="button" 
-                                onClick={handleCheckBind} 
-                                disabled={loading}
-                                className="w-full py-2.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
-                            >
-                                {loading ? '正在查询...' : '我已完成绑定'}
-                            </button>
+                {step === 1 ? (
+                    <form onSubmit={handleNextStep} className="space-y-5 relative z-10">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-400 mb-1">设定登录用户名</label>
+                            <input 
+                                type="text" 
+                                value={username}
+                                onChange={(e) => setUsername(e.target.value)}
+                                className="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-500 transition-colors"
+                                placeholder="推荐使用您的常用代号"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-400 mb-1">设定密码</label>
+                            <input 
+                                type="password" 
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                className="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-500 transition-colors"
+                                placeholder="输入密码"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-400 mb-1">确认密码</label>
+                            <input 
+                                type="password" 
+                                value={confirmPassword}
+                                onChange={(e) => setConfirmPassword(e.target.value)}
+                                className="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-500 transition-colors"
+                                placeholder="再次输入密码"
+                            />
+                        </div>
+                        <button 
+                            type="submit"
+                            className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg transition-colors mt-2"
+                        >
+                            下一步：绑定验证
+                        </button>
+                    </form>
+                ) : (
+                    <div className="space-y-6 relative z-10">
+                        <div className="bg-gray-900/50 p-4 rounded-lg border border-gray-700">
+                            <h3 className="text-white font-bold mb-2 text-sm">请按照以下步骤完成 Wikidot 身份绑定：</h3>
+                            <ol className="text-gray-400 text-sm list-decimal list-inside space-y-2 leading-relaxed">
+                                <li>复制下方的专属验证码。</li>
+                                <li>前往指定验证页面：<a href="https://wikkit.wikidot.com/wikitdb:verify" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">wikitdb:verify</a></li>
+                                <li>点击该页面底部的 <strong>Edit (编辑)</strong>。</li>
+                                <li>在 <strong>Short description (简短摘要)</strong> 输入框中粘贴您的验证码，不需要修改页面正文内容。</li>
+                                <li>点击 <strong>Save (保存)</strong>，然后回到这里点击验证。</li>
+                            </ol>
+                        </div>
 
+                        <div className="text-center bg-[#1e1e1e] border border-gray-600 py-3 rounded-lg">
+                            <div className="text-xs text-gray-500 mb-1">您的专属验证码 (Short description)</div>
+                            <div className="text-2xl font-mono font-bold text-yellow-400 select-all tracking-wider">
+                                {verifyCode}
+                            </div>
+                        </div>
+
+                        <div className="flex gap-3">
                             <button 
-                                type="button" 
-                                onClick={handleReset} 
-                                className="w-full py-2 text-gray-400 hover:text-white text-sm transition-colors mt-2"
+                                onClick={() => setStep(1)}
+                                className="px-4 py-3 bg-gray-700 hover:bg-gray-600 text-white font-bold rounded-lg transition-colors"
                             >
-                                返回上一步重新生成
+                                返回修改
+                            </button>
+                            <button 
+                                onClick={handleVerifyAndRegister}
+                                disabled={isVerifying}
+                                className="flex-1 bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded-lg transition-colors disabled:bg-gray-600"
+                            >
+                                {isVerifying ? '正在查询历史记录...' : '我已完成编辑，开始验证'}
                             </button>
                         </div>
-                    )}
-
-                    {step === 3 && (
-                        <div className="p-4 bg-gray-900/50 border border-gray-600 rounded-lg space-y-5">
-                            <div className="text-center">
-                                <div className="text-gray-400 text-sm mb-2">已读取到您的 Wikidot 账号：</div>
-                                <div className="text-xl font-bold text-indigo-400 bg-gray-900 py-2 rounded border border-gray-700">
-                                    {wdid}
-                                </div>
-                            </div>
-                            
-                            <button 
-                                type="button" 
-                                onClick={handleFinalSubmit} 
-                                disabled={loading}
-                                className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
-                            >
-                                {loading ? '正在写入数据库...' : '确认无误，完成注册'}
-                            </button>
-
-                            <button 
-                                type="button" 
-                                onClick={() => setStep(2)} 
-                                className="w-full py-2 text-gray-400 hover:text-white text-sm transition-colors mt-2"
-                            >
-                                账号不对？重新验证
-                            </button>
-                        </div>
-                    )}
-                </div>
+                    </div>
+                )}
             </div>
         </div>
     );
