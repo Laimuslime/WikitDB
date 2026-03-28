@@ -17,6 +17,7 @@ export default function Tools() {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {/* 原有功能：档案馆盲盒 */}
                     <Link href="/tools/gacha" className="bg-gray-800/50 p-6 rounded-xl border border-gray-700 hover:border-purple-500 hover:bg-gray-800 transition-all group flex flex-col justify-between shadow-lg">
                         <div className="grid grid-cols-[min-content_1fr]">
                             <div className="rounded-xl bg-[#24344f] p-[10px_8px] text-purple-400 group-hover:text-purple-500 mb-4 mr-4 max-h-14 text-3xl">
@@ -31,9 +32,70 @@ export default function Tools() {
                         </div>
                     </Link>
 
+                    {/* 新增功能：作者概念股 */}
+                    <Link href="/tools/author-stock" className="bg-gray-800/50 p-6 rounded-xl border border-gray-700 hover:border-green-500 hover:bg-gray-800 transition-all group flex flex-col justify-between shadow-lg">
+                        <div className="grid grid-cols-[min-content_1fr]">
+                            <div className="rounded-xl bg-[#24344f] p-[10px_8px] text-green-400 group-hover:text-green-500 mb-4 mr-4 max-h-14 text-3xl">
+                                <i className="fa-solid fa-chart-line"></i>
+                            </div>
+                            <div>
+                                <h2 className="text-xl font-bold text-white mb-2 group-hover:text-green-400 transition-colors">作者概念股</h2>
+                                <p className="text-gray-400 text-sm leading-relaxed">
+                                    投资有潜力的创作者，股价走势与近期发文量、存活率深度挂钩。
+                                </p>
+                            </div>
+                        </div>
+                    </Link>
+
+                    {/* 新增功能：页面打新评断 */}
+                    <Link href="/tools/quality-judge" className="bg-gray-800/50 p-6 rounded-xl border border-gray-700 hover:border-cyan-500 hover:bg-gray-800 transition-all group flex flex-col justify-between shadow-lg">
+                        <div className="grid grid-cols-[min-content_1fr]">
+                            <div className="rounded-xl bg-[#24344f] p-[10px_8px] text-cyan-400 group-hover:text-cyan-500 mb-4 mr-4 max-h-14 text-3xl">
+                                <i className="fa-solid fa-scale-balanced"></i>
+                            </div>
+                            <div>
+                                <h2 className="text-xl font-bold text-white mb-2 group-hover:text-cyan-400 transition-colors">页面打新评断</h2>
+                                <p className="text-gray-400 text-sm leading-relaxed">
+                                    获取近期最新发布的页面，做多或做空它们未来的评分走向。
+                                </p>
+                            </div>
+                        </div>
+                    </Link>
+
+                    {/* 新增功能：战力雷达评估 */}
+                    <Link href="/tools/radar" className="bg-gray-800/50 p-6 rounded-xl border border-gray-700 hover:border-indigo-500 hover:bg-gray-800 transition-all group flex flex-col justify-between shadow-lg">
+                        <div className="grid grid-cols-[min-content_1fr]">
+                            <div className="rounded-xl bg-[#24344f] p-[10px_8px] text-indigo-400 group-hover:text-indigo-500 mb-4 mr-4 max-h-14 text-3xl">
+                                <i className="fa-solid fa-crosshairs"></i>
+                            </div>
+                            <div>
+                                <h2 className="text-xl font-bold text-white mb-2 group-hover:text-indigo-400 transition-colors">战力雷达评估</h2>
+                                <p className="text-gray-400 text-sm leading-relaxed">
+                                    跨站聚合创作者的历史档案，多维度生成雷达图并推算其危险等级。
+                                </p>
+                            </div>
+                        </div>
+                    </Link>
+
+                    {/* 新增功能：代码修复逃脱 */}
+                    <Link href="/tools/escape" className="bg-gray-800/50 p-6 rounded-xl border border-gray-700 hover:border-orange-500 hover:bg-gray-800 transition-all group flex flex-col justify-between shadow-lg">
+                        <div className="grid grid-cols-[min-content_1fr]">
+                            <div className="rounded-xl bg-[#24344f] p-[10px_8px] text-orange-400 group-hover:text-orange-500 mb-4 mr-4 max-h-14 text-3xl">
+                                <i className="fa-solid fa-triangle-exclamation"></i>
+                            </div>
+                            <div>
+                                <h2 className="text-xl font-bold text-white mb-2 group-hover:text-orange-400 transition-colors">代码修复逃脱</h2>
+                                <p className="text-gray-400 text-sm leading-relaxed">
+                                    随机抽取受损的页面源码，限时修复排版语法以阻止收容失效。
+                                </p>
+                            </div>
+                        </div>
+                    </Link>
+
+                    {/* 原有功能：成员管理 */}
                     <Link href="/tools/member-admin" className="bg-gray-800/50 p-6 rounded-xl border border-gray-700 hover:border-blue-500 hover:bg-gray-800 transition-all group flex flex-col justify-between shadow-lg">
                         <div className="grid grid-cols-[min-content_1fr]">
-                            <div className="rounded-xl bg-[#24344f] p-[10px_8px] text-blue-400 group-hover:text-bule-500 mb-4 mr-4 max-h-14 text-3xl">
+                            <div className="rounded-xl bg-[#24344f] p-[10px_8px] text-blue-400 group-hover:text-blue-500 mb-4 mr-4 max-h-14 text-3xl">
                                 <i className="fa-solid fa-users-gear"></i>
                             </div>
                             <div>
@@ -45,6 +107,7 @@ export default function Tools() {
                         </div>
                     </Link>
 
+                    {/* 原有功能：删帖公示 */}
                     <Link href="/tools/delete-announcement" className="bg-gray-800/50 p-6 rounded-xl border border-gray-700 hover:border-red-500 hover:bg-gray-800 transition-all group flex flex-col justify-between shadow-lg">
                         <div className="grid grid-cols-[min-content_1fr]">
                             <div className="rounded-xl bg-[#24344f] p-[10px_8px] text-red-400 group-hover:text-red-500 mb-4 mr-4 max-h-14 text-3xl">
