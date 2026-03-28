@@ -98,8 +98,8 @@ export default async function handler(req, res) {
 
         // 根据原站评分计算稀有度
         let rarity = 'N';
-        if (score >= 100) rarity = 'SSR';
-        else if (score >= 50) rarity = 'SR';
+        if (score >= 20) rarity = 'SSR';
+        else if (score >= 10) rarity = 'SR';
         else if (score >= 0) rarity = 'R';
 
         const drawResult = {
