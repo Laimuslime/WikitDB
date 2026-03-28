@@ -1,62 +1,65 @@
 import React from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
+
 const config = require('../wikitdb.config.js');
 
-const Tools = () => {
+export default function Tools() {
     return (
-        <>
+        <div className="min-h-screen bg-gray-950 text-white py-12 px-4">
             <Head>
-                <title>工具 - {config.SITE_NAME}</title>
+                <title>工具箱 - {config.SITE_NAME}</title>
             </Head>
-
-            <div className="py-8 max-w-5xl mx-auto">
-                <div className="mb-8 border-b border-gray-700 pb-6">
-                    <h1 className="text-3xl font-bold text-white">工具库</h1>
-                    <p className="text-gray-400 mt-2 text-sm">提供基于 Wikit API 的各种便捷站点管理与查询工具。</p>
+            <div className="max-w-4xl mx-auto">
+                <div className="mb-8 border-b border-gray-800 pb-4">
+                    <h1 className="text-3xl font-bold text-gray-100">工具箱</h1>
+                    <p className="text-gray-500 mt-2 text-sm">WikitDB 的各项扩展功能与实验性应用。</p>
                 </div>
-
+                
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    <Link 
-                        href="/tools/member-admin" 
-                        className="bg-gray-800/50 rounded-xl p-6 border border-white/10 hover:border-indigo-500/50 hover:bg-gray-800 transition-all group block"
-                    >
-                        <div className="w-12 h-12 rounded-lg bg-indigo-500/10 text-indigo-400 flex items-center justify-center text-2xl mb-4 group-hover:scale-110 group-hover:bg-indigo-500/20 transition-all">
-                            <i className="fa-solid fa-user-shield"></i>
+                    {/* 盲盒抽卡入口 (新增) */}
+                    <Link href="/tools/gacha" className="bg-gray-900 p-6 rounded-xl border border-gray-800 hover:border-purple-500 hover:shadow-[0_0_15px_rgba(168,85,247,0.2)] transition-all group relative overflow-hidden flex flex-col justify-between">
+                        <div className="absolute top-0 right-0 bg-purple-600 text-white text-[10px] font-bold px-3 py-1 rounded-bl-lg">
+                            HOT
                         </div>
-                        <h2 className="text-xl font-bold text-white mb-2 group-hover:text-indigo-300 transition-colors">
-                            成员管理
-                        </h2>
-                        <p className="text-sm text-gray-400 leading-relaxed">
-                            调用 Wikit 官方 API，安全地对指定站点的 Wikidot 用户执行移除或封禁操作。
-                        </p>
+                        <div>
+                            <div className="text-purple-500 mb-3 text-2xl">
+                                <i className="fa-solid fa-box-open"></i>
+                            </div>
+                            <h2 className="text-lg font-bold mb-2 group-hover:text-purple-400 transition-colors">档案馆盲盒</h2>
+                            <p className="text-gray-400 text-sm leading-relaxed">
+                                消耗资产，在浩瀚的数据中随机抽取未知的页面标的进行投资。
+                            </p>
+                        </div>
                     </Link>
 
-                    {/* 新增：删除公告生成入口 */}
-                    <Link 
-                        href="/tools/delete-announcement" 
-                        className="bg-gray-800/50 rounded-xl p-6 border border-white/10 hover:border-red-500/50 hover:bg-gray-800 transition-all group block"
-                    >
-                        <div className="w-12 h-12 rounded-lg bg-red-500/10 text-red-400 flex items-center justify-center text-2xl mb-4 group-hover:scale-110 group-hover:bg-red-500/20 transition-all">
-                            <i className="fa-solid fa-bullhorn"></i>
+                    {/* 成员管理入口 */}
+                    <Link href="/tools/member-admin" className="bg-gray-900 p-6 rounded-xl border border-gray-800 hover:border-blue-500 transition-all group flex flex-col justify-between">
+                        <div>
+                            <div className="text-blue-500 mb-3 text-2xl">
+                                <i className="fa-solid fa-users-gear"></i>
+                            </div>
+                            <h2 className="text-lg font-bold mb-2 group-hover:text-blue-400 transition-colors">成员管理</h2>
+                            <p className="text-gray-400 text-sm leading-relaxed">
+                                查阅、管理网站成员的权限状态。
+                            </p>
                         </div>
-                        <h2 className="text-xl font-bold text-white mb-2 group-hover:text-red-300 transition-colors">
-                            删除公告生成
-                        </h2>
-                        <p className="text-sm text-gray-400 leading-relaxed">
-                            快速抓取页面信息，一键生成符合 Wikidot 格式的低分/违规页面删除公告代码。
-                        </p>
                     </Link>
 
-                    <div className="bg-gray-800/30 rounded-xl p-6 border border-white/5 border-dashed flex flex-col items-center justify-center text-center min-h-[200px] opacity-70">
-                        <i className="fa-solid fa-plus text-3xl text-gray-600 mb-3"></i>
-                        <h2 className="text-lg font-medium text-gray-500">更多工具</h2>
-                        <p className="text-sm text-gray-600 mt-1">敬请期待...</p>
-                    </div>
+                    {/* 删帖公示入口 */}
+                    <Link href="/tools/delete-announcement" className="bg-gray-900 p-6 rounded-xl border border-gray-800 hover:border-red-500 transition-all group flex flex-col justify-between">
+                        <div>
+                            <div className="text-red-500 mb-3 text-2xl">
+                                <i className="fa-solid fa-trash-can"></i>
+                            </div>
+                            <h2 className="text-lg font-bold mb-2 group-hover:text-red-400 transition-colors">删帖公示</h2>
+                            <p className="text-gray-400 text-sm leading-relaxed">
+                                查看近期已被删除的页面记录与相关公示信息。
+                            </p>
+                        </div>
+                    </Link>
                 </div>
             </div>
-        </>
+        </div>
     );
-};
-
-export default Tools;
+}
