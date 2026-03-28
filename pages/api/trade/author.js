@@ -51,7 +51,6 @@ export default async function handler(req, res) {
         return res.status(405).json({ error: '仅支持 POST 请求' });
     }
 
-    // 接收 amount 参数，默认值为 1
     const { username, authorName, action, amount = 1 } = req.body;
     const tradeAmount = Number(amount);
 
@@ -63,27 +62,34 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: '交易参数不完整或数量错误' });
     }
 
-    // 服务端计算价格
-    const realPrice = await getAuthorPrice(authorName);
-    const priceNum = Number(realPrice);
-
     try {
-        // 读取用户的基本信息和余额
         const userKey = `user:${username}`;
         let user = await redis.get(userKey);
         
         if (!user) {
-            return res.status(404).json({ error: '找不到该用户' });
+            // 如果用户不存在，默认给 10000 并写入
+            user = { balance: 10000 };
+            await redis.set(userKey, user);
         }
 
         const currentBalance = user.balance !== undefined ? Number(user.balance) : 10000;
         
-        // 读取用户当前在这个作者上的持仓数
         const portfolioKey = `portfolio:${username}`;
         const currentPositionStr = await redis.hget(portfolioKey, authorName);
         const currentPosition = currentPositionStr ? Number(currentPositionStr) : 0;
 
-        // 计算总交易额和手续费
+        // 【新增逻辑】如果是 query，就只返回余额和持仓，不做任何扣款查价
+        if (action === 'query') {
+            return res.status(200).json({
+                newBalance: currentBalance,
+                newPosition: currentPosition
+            });
+        }
+
+        // 服务端计算真实价格
+        const realPrice = await getAuthorPrice(authorName);
+        const priceNum = Number(realPrice);
+
         const transactionValue = priceNum * tradeAmount;
         const fee = transactionValue * 0.01; 
 
@@ -94,7 +100,6 @@ export default async function handler(req, res) {
                 return res.status(400).json({ error: `余额不足！买入需 ${totalCost.toFixed(2)} (含手续费)，当前可用 ${currentBalance.toFixed(2)}` });
             }
 
-            // 扣钱并加仓
             user.balance = currentBalance - totalCost;
             await redis.set(userKey, user);
             await redis.hset(portfolioKey, { [authorName]: currentPosition + tradeAmount });
@@ -106,7 +111,6 @@ export default async function handler(req, res) {
 
             const netIncome = transactionValue - fee;
 
-            // 加钱并减仓
             user.balance = currentBalance + netIncome;
             await redis.set(userKey, user);
             await redis.hset(portfolioKey, { [authorName]: currentPosition - tradeAmount });
@@ -115,7 +119,6 @@ export default async function handler(req, res) {
             return res.status(400).json({ error: '未知的交易操作' });
         }
 
-        // 记录这条交易流水
         const tradeRecord = {
             id: Date.now().toString(),
             username,
@@ -134,10 +137,11 @@ export default async function handler(req, res) {
         res.status(200).json({ 
             message: action === 'buy' ? '买入成功' : '卖出成功',
             newBalance: user.balance,
-            newPosition: action === 'buy' ? currentPosition + tradeAmount : currentPosition - tradeAmount
+            newPosition: action === 'buy' ? currentPosition + tradeAmount : currentPosition - tradeAmount,
+            executedPrice: priceNum // 返回真实成交价
         });
 
     } catch (error) {
-        res.status(500).json({ error: '数据库写入失败' });
+        res.status(500).json({ error: '服务器内部错误' });
     }
 }
