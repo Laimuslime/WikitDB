@@ -115,7 +115,7 @@ export default function Register() {
                 <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl pointer-events-none"></div>
 
                 <div className="text-center mb-8">
-                    <h1 className="text-3xl font-bold text-white mb-2">加入控制网</h1>
+                    <h1 className="text-3xl font-bold text-white mb-2">加入Wikit数据库</h1>
                     <p className="text-gray-400 text-sm">注册 WikitDB 档案库</p>
                 </div>
 
