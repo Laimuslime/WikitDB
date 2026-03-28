@@ -18,7 +18,6 @@ export default async function handler(req, res) {
         const exists = await redis.get(`user:${username}`);
         if (exists) return res.status(400).json({ error: '该名称已被占用' });
 
-        // 生成唯一的验证码用于编辑摘要核对
         const verifyCode = 'WIKIT-' + Math.random().toString(36).substring(2, 8).toUpperCase();
 
         try {
@@ -41,15 +40,16 @@ export default async function handler(req, res) {
             
             let wdid = '';
             
-            // 针对 API 返回的特殊 Object 格式进行遍历解析
-            for (const key in historyData) {
-                // 只处理以 rev: 开头的键名（即历史记录项）
-                if (key.startsWith('rev:')) {
-                    const rev = historyData[key];
+            // 直接读取 data.revisions 数组
+            if (historyData.status === 'success' && historyData.data && historyData.data.revisions) {
+                // 直接截取前 10 个记录进行遍历，性能拉满
+                const recentRevisions = historyData.data.revisions.slice(0, 10);
+                
+                for (const rev of recentRevisions) {
                     // 对比 comment 字段
                     if (rev.comment && rev.comment.trim() === tempRecord.verifyCode) {
-                        // 匹配成功，提取 API 中的 username 字段
-                        wdid = rev.username;
+                        // 匹配成功，提取 API 中的 user 字段 (从你的新图确认字段名为 user)
+                        wdid = rev.user;
                         break;
                     }
                 }
