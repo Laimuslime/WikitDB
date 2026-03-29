@@ -2,39 +2,32 @@ import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
-import config from '../../wikitdb.config.js'; // 如果你的 config 里配置了站点列表，可以解开这行注释使用
+import config from '../../wikitdb.config.js';
 
 export default function ForumRecent() {
-    // 假设这是你配置文件里的站点列表。如果解开了上面的注释，可以换成 config.SITES
-    const availableSites = [
-        { id: 'ubmh', name: 'SCP-CN' },
-        { id: 'scp-wiki', name: 'SCP-EN' },
-        { id: 'wanderers-library', name: 'WL-EN' },
-        { id: 'backrooms-wiki-cn', name: 'Backrooms-CN' }
-    ];
-
-    const [activeSite, setActiveSite] = useState(availableSites[0].id);
+    const availableSites = config.SUPPORT_WIKI || [];
+    const [activeSite, setActiveSite] = useState(availableSites.length > 0 ? availableSites[0] : null);
     const [posts, setPosts] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
 
-    // 当切换 Tab 或初次加载时，触发抓取
     useEffect(() => {
-        fetchRecentPosts(activeSite);
+        if (activeSite) {
+            fetchRecentPosts(activeSite.URL);
+        }
     }, [activeSite]);
 
-    const fetchRecentPosts = async (targetSite) => {
+    const fetchRecentPosts = async (targetUrl) => {
         setIsLoading(true);
-        setPosts([]); // 切换站点时先清空列表，提升视觉反馈
+        setPosts([]); 
         
         try {
-            // 将选中的站点标识传给后端
-            const res = await fetch(`/api/forum/recent?wiki=${targetSite}`);
+            const res = await fetch(`/api/forum/recent?url=${encodeURIComponent(targetUrl)}`);
             const data = await res.json();
             
             if (res.ok) {
                 setPosts(data.posts || []);
             } else {
-                toast.error(data.error || `抓取 ${targetSite} 失败`);
+                toast.error(data.error || '抓取失败');
             }
         } catch (error) {
             toast.error('网络请求超时');
@@ -43,9 +36,13 @@ export default function ForumRecent() {
         }
     };
 
+    if (!activeSite) {
+        return <div className="p-8 text-white">请在 wikitdb.config.js 中配置 SUPPORT_WIKI</div>;
+    }
+
     return (
         <div className="py-8 font-sans bg-[#0a0a0a] min-h-screen text-gray-200">
-            <Head><title>全域通讯监测 - WikitDB</title></Head>
+            <Head><title>全域通讯监测 - {config.SITE_NAME}</title></Head>
             
             <div className="max-w-6xl mx-auto px-4">
                 <div className="mb-6">
@@ -58,11 +55,11 @@ export default function ForumRecent() {
                                 <i className="fa-solid fa-satellite text-blue-500"></i> 全域通讯监测 (Omni-Link)
                             </h1>
                             <p className="text-gray-400 mt-2 text-sm">
-                                实时捕获多个 Wikidot 站点的论坛动态。
+                                实时捕获多个站点的论坛动态。
                             </p>
                         </div>
                         <button 
-                            onClick={() => fetchRecentPosts(activeSite)} 
+                            onClick={() => fetchRecentPosts(activeSite.URL)} 
                             disabled={isLoading}
                             className="bg-gray-900 border border-gray-700 hover:bg-gray-800 text-gray-300 px-6 py-2 rounded font-mono text-sm transition-colors shadow-sm"
                         >
@@ -71,19 +68,19 @@ export default function ForumRecent() {
                     </div>
                 </div>
 
-                {/* 多站点 Tab 切换栏 */}
                 <div className="flex overflow-x-auto custom-scrollbar mb-6 border-b border-gray-800">
                     {availableSites.map(site => (
                         <button
-                            key={site.id}
-                            onClick={() => setActiveSite(site.id)}
-                            className={`px-6 py-3 text-sm font-bold font-mono tracking-wider transition-colors border-b-2 whitespace-nowrap ${
-                                activeSite === site.id 
+                            key={site.URL}
+                            onClick={() => setActiveSite(site)}
+                            className={`px-6 py-3 text-sm font-bold font-mono tracking-wider transition-colors border-b-2 whitespace-nowrap flex items-center gap-2 ${
+                                activeSite.URL === site.URL 
                                 ? 'text-blue-400 border-blue-500 bg-blue-900/10' 
                                 : 'text-gray-500 border-transparent hover:text-gray-300 hover:bg-gray-900/50'
                             }`}
                         >
-                            {site.name}
+                            {site.ImgURL && <img src={site.ImgURL} alt={site.NAME} className="w-4 h-4 object-contain" />}
+                            {site.NAME}
                         </button>
                     ))}
                 </div>
@@ -91,7 +88,7 @@ export default function ForumRecent() {
                 <div className="bg-[#121212] border border-gray-800 rounded-xl shadow-lg overflow-hidden">
                     <div className="bg-gray-900/50 px-6 py-3 border-b border-gray-800 flex justify-between items-center">
                         <span className="text-xs font-mono text-gray-500 uppercase tracking-widest">
-                            Intercepted from: {activeSite}.wikidot.com
+                            Intercepted from: {activeSite.URL}
                         </span>
                         <span className="text-xs font-mono font-bold text-blue-400">
                             {posts.length} THREADS DETECTED
@@ -112,7 +109,7 @@ export default function ForumRecent() {
                                 {isLoading ? (
                                     <tr>
                                         <td colSpan="4" className="px-6 py-16 text-center text-gray-500 font-mono tracking-widest">
-                                            [ESTABLISHING CONNECTION TO {activeSite.toUpperCase()}...]
+                                            [ESTABLISHING CONNECTION...]
                                         </td>
                                     </tr>
                                 ) : posts.length === 0 ? (
@@ -131,7 +128,6 @@ export default function ForumRecent() {
                                                 </div>
                                                 <div className="text-[10px] text-gray-600 font-mono mt-1 flex items-center gap-2">
                                                     <span className="bg-gray-900 px-1.5 py-0.5 rounded border border-gray-700">ID: {post.id}</span>
-                                                    {/* 提供一个快捷跳转按钮，可以直接跳到你之前做的 forum.js 树状图页面去解析这个帖子 */}
                                                     <a href={`/tools/forum?id=${post.id}`} target="_blank" rel="noreferrer" className="text-blue-500 hover:text-blue-300 opacity-0 group-hover:opacity-100 transition-opacity">
                                                         <i className="fa-solid fa-arrow-up-right-from-square"></i> Deep Scan
                                                     </a>
