@@ -1,9 +1,10 @@
 import { Redis } from '@upstash/redis';
+import { verifyToken } from '../../../utils/auth';
 
 const redis = Redis.fromEnv();
 
 export default async function handler(req, res) {
-    const { action, username, number } = req.body;
+    const { action, number } = req.body;
 
     if (req.method === 'GET') {
         const pool = await redis.get('jackpot_pool') || 0;
@@ -13,17 +14,23 @@ export default async function handler(req, res) {
 
     if (req.method === 'POST') {
         if (action === 'buy') {
-            if (!username || !number) return res.status(400).json({ error: '参数不完整' });
+            // 【安全锁】
+            const decoded = verifyToken(req);
+            if (!decoded || !decoded.username) return res.status(401).json({ error: '未授权的访问' });
+            const username = decoded.username; 
+
+            if (!number) return res.status(400).json({ error: '参数不完整' });
             
             const userKey = `user:${username}`;
             let user = await redis.get(userKey);
             if (!user) return res.status(404).json({ error: '用户不存在' });
             if (typeof user === 'string') user = JSON.parse(user);
 
-            if ((user.balance || 0) < 50) return res.status(400).json({ error: '余额不足 (¥50)' });
+            if ((user.balance || 0) < 50) return res.status(400).json({ error: '余额不足 (需要 ¥50)' });
 
             user.balance -= 50;
             await redis.set(userKey, JSON.stringify(user));
+            
             await redis.incrby('jackpot_pool', 50);
             await redis.hset('jackpot_tickets', { [username]: number });
 
