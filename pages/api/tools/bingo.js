@@ -1,38 +1,25 @@
-// pages/api/tools/bingo.js
 import { Redis } from '@upstash/redis';
 
 const redis = Redis.fromEnv();
 
 export default async function handler(req, res) {
-    // GET: 给前端下发后台配置的标签池和价格
     if (req.method === 'GET') {
         try {
             let config = await redis.get('config:bingo');
             if (typeof config === 'string') config = JSON.parse(config);
-            
-            // 如果后台还没设置过，给一套默认值
-            if (!config) {
-                config = { 
-                    tags: ['原创', '精品', 'scp', 'tale', 'goi-format', '微恐', '搞笑', '科幻', 'keter'], 
-                    cost: 50 
-                };
-            }
+            if (!config) config = { tags: ['原创', '精品', 'scp', 'tale', 'goi-format', '微恐', '搞笑', '科幻', 'keter'], cost: 50 };
             return res.status(200).json(config);
         } catch (e) {
             return res.status(500).json({ error: '配置读取失败' });
         }
     }
 
-    // POST: 玩家执行抽卡
     if (req.method === 'POST') {
         const { username, selectedTags } = req.body;
         if (!username) return res.status(401).json({ error: '未登录' });
-        if (!selectedTags || selectedTags.length !== 3) {
-            return res.status(400).json({ error: '请精确选择 3 个标签' });
-        }
+        if (!selectedTags || selectedTags.length !== 3) return res.status(400).json({ error: '请精确选择 3 个标签' });
 
         try {
-            // 读取最新的玩法配置
             let config = await redis.get('config:bingo');
             if (typeof config === 'string') config = JSON.parse(config);
             const cost = config?.cost || 50;
@@ -42,49 +29,54 @@ export default async function handler(req, res) {
             if (!user) return res.status(404).json({ error: '用户不存在' });
             if (typeof user === 'string') user = JSON.parse(user);
 
-            if ((user.balance || 0) < cost) {
-                return res.status(400).json({ error: `余额不足，每次扫描需要 ¥${cost}` });
-            }
-            
-            user.balance -= cost;
+            if ((user.balance || 0) < cost) return res.status(400).json({ error: `余额不足，每次扫描需要 ¥${cost}` });
 
-            const query = {
-                query: `
-                    query {
-                        articles(sort: random, page: 1, pageSize: 1) {
-                            nodes { wiki, title, author, tags }
-                        }
-                    }
-                `
-            };
-
-            const gqlRes = await fetch('https://wikit.unitreaty.org/apiv1/graphql', {
+            // 核心修复 1：先用规范的 GraphQL 语法拿 total 总数
+            const countQuery = { query: `query { articles(page: 1, pageSize: 1) { pageInfo { total } } }` };
+            const countRes = await fetch('https://wikit.unitreaty.org/apiv1/graphql', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(query)
+                body: JSON.stringify(countQuery)
             });
+            const countData = await countRes.json();
             
-            const gqlData = await gqlRes.json();
-            const pageNode = gqlData.data?.articles?.nodes?.[0];
-
-            if (!pageNode) {
-                user.balance += cost;
-                await redis.set(userKey, JSON.stringify(user));
-                return res.status(500).json({ error: '节点数据获取失败，已退还本金' });
+            if (countData.errors || !countData.data?.articles?.pageInfo?.total) {
+                return res.status(500).json({ error: '获取数据库总页数失败' });
             }
+
+            // 核心修复 2：在总数范围内生成合法页码，定点抓取一条，彻底避开 random 报错
+            const total = countData.data.articles.pageInfo.total;
+            const randomPage = Math.floor(Math.random() * total) + 1;
+
+            const fetchQuery = {
+                query: `query { articles(page: ${randomPage}, pageSize: 1) { nodes { wiki title author tags } } }`
+            };
+            const fetchRes = await fetch('https://wikit.unitreaty.org/apiv1/graphql', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(fetchQuery)
+            });
+            const fetchData = await fetchRes.json();
+
+            if (fetchData.errors || !fetchData.data?.articles?.nodes || fetchData.data.articles.nodes.length === 0) {
+                return res.status(500).json({ error: '抓取页面节点失败' });
+            }
+
+            const pageNode = fetchData.data.articles.nodes[0];
+            
+            // 确保安全后再扣钱
+            user.balance -= cost;
 
             const pageTags = pageNode.tags || [];
             const matchedTags = selectedTags.filter(t => pageTags.includes(t));
             const matchCount = matchedTags.length;
 
             let reward = 0;
-            // 奖励跟随后台配置的价格按比例放大：1倍 / 10倍 / 100倍
             if (matchCount === 1) reward = cost;
             if (matchCount === 2) reward = cost * 10;
             if (matchCount === 3) reward = cost * 100;
 
             user.balance += reward;
-
             await redis.set(userKey, JSON.stringify(user));
 
             return res.status(200).json({
@@ -95,11 +87,9 @@ export default async function handler(req, res) {
                 reward,
                 newBalance: user.balance
             });
-
         } catch (error) {
             return res.status(500).json({ error: '服务器内部错误' });
         }
     }
-    
     return res.status(405).json({ error: 'Method not allowed' });
 }
