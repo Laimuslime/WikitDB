@@ -1,5 +1,7 @@
 import { Redis } from '@upstash/redis';
 import bcrypt from 'bcryptjs';
+import { signToken } from '../../utils/auth';
+import { serialize } from 'cookie';
 
 const redis = Redis.fromEnv();
 
@@ -15,23 +17,26 @@ export default async function handler(req, res) {
     }
 
     try {
-        const user = await redis.get(`user:${username}`);
-        
-        if (!user) {
-            return res.status(400).json({ error: '用户不存在' });
-        }
+        const userStr = await redis.get(`user:${username}`);
+        if (!userStr) return res.status(400).json({ error: '用户不存在' });
 
+        const user = typeof userStr === 'string' ? JSON.parse(userStr) : userStr;
         const isMatch = await bcrypt.compare(password, user.password);
         
-        if (!isMatch) {
-            return res.status(400).json({ error: '密码错误' });
-        }
+        if (!isMatch) return res.status(400).json({ error: '密码错误' });
 
-        const token = Buffer.from(`${username}-${Date.now()}`).toString('base64');
+        const token = signToken({ username: user.username });
+
+        res.setHeader('Set-Cookie', serialize('auth_token', token, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'strict',
+            maxAge: 60 * 60 * 24 * 7,
+            path: '/'
+        }));
 
         res.status(200).json({ 
             message: '登录成功',
-            token: token,
             username: user.username
         });
 
