@@ -11,16 +11,18 @@ export default async function handler(req, res) {
         return res.status(401).json({ error: '未经授权的访问' });
     }
 
-    // 从前端接收目标站点标识符，默认为 scp-wiki-cn
-    const { wiki = 'scp-wiki-cn' } = req.query;
+    const { url } = req.query;
+
+    if (!url) {
+        return res.status(400).json({ error: '缺少目标站点参数' });
+    }
 
     try {
-        // 动态构建目标 URL
-        const targetUrl = `https://${wiki}.wikidot.com/forum:recent-posts`;
+        const targetUrl = `${url}/forum:recent-posts`;
         
         const response = await fetch(targetUrl);
         if (!response.ok) {
-            throw new Error(`无法连接到目标站点节点: ${wiki}`);
+            throw new Error(`无法连接到目标站点节点`);
         }
 
         const html = await response.text();
@@ -58,9 +60,9 @@ export default async function handler(req, res) {
             }
         });
 
-        return res.status(200).json({ success: true, posts, source: wiki });
+        return res.status(200).json({ success: true, posts, source: url });
 
     } catch (error) {
-        return res.status(500).json({ error: '解析节点数据时发生异常，请检查该站点是否存在或已开启论坛模块' });
+        return res.status(500).json({ error: '解析节点数据时发生异常' });
     }
 }
