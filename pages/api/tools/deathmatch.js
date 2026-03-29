@@ -1,12 +1,17 @@
 import { Redis } from '@upstash/redis';
+import { verifyToken } from '../../../utils/auth';
 
 const redis = Redis.fromEnv();
 
 export default async function handler(req, res) {
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-    const { username, betAmount, betSide } = req.body;
-    if (!username) return res.status(401).json({ error: '未登录' });
+    // 【安全锁】
+    const decoded = verifyToken(req);
+    if (!decoded || !decoded.username) return res.status(401).json({ error: '未授权的访问' });
+    const username = decoded.username; 
+
+    const { betAmount, betSide } = req.body;
 
     try {
         const userKey = `user:${username}`;
@@ -18,35 +23,38 @@ export default async function handler(req, res) {
         if (isNaN(amount) || amount <= 0) return res.status(400).json({ error: '下注金额无效' });
         if ((user.balance || 0) < amount) return res.status(400).json({ error: '账户余额不足' });
 
-        // 获取数据库全量页数，安全抽取
         const countRes = await fetch('https://wikit.unitreaty.org/apiv1/graphql', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ query: `query { articles(page: 1, pageSize: 1) { pageInfo { total } } }` })
         });
         const countData = await countRes.json();
-        const total = countData.data?.articles?.pageInfo?.total || 1000;
+        if (countData.errors || !countData.data?.articles?.pageInfo?.total) {
+            return res.status(500).json({ error: '无法获取数据库页面总数' });
+        }
+        
+        const total = countData.data.articles.pageInfo.total;
 
-        const p1 = Math.floor(Math.random() * total) + 1;
-        const p2 = Math.floor(Math.random() * total) + 1;
-
-        const fetchPage = async (page) => {
+        const fetchPage = async () => {
+            const randomPage = Math.floor(Math.random() * total) + 1;
             const r = await fetch('https://wikit.unitreaty.org/apiv1/graphql', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ query: `query { articles(page: ${page}, pageSize: 1) { nodes { wiki title rating author } } }` })
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query: `query { articles(page: ${randomPage}, pageSize: 1) { nodes { wiki title rating author } } }` })
             });
             const d = await r.json();
-            return d.data?.articles?.nodes[0] || { title: 'Unknown Anomaly', rating: 0, wiki: 'unknown' };
+            return d.data?.articles?.nodes[0];
         };
 
-        const [leftPage, rightPage] = await Promise.all([fetchPage(p1), fetchPage(p2)]);
+        const [leftPage, rightPage] = await Promise.all([fetchPage(), fetchPage()]);
+        if (!leftPage || !rightPage) return res.status(500).json({ error: '数据节点抓取失败' });
 
         user.balance -= amount;
 
         let winner = 'draw';
-        if (leftPage.rating > rightPage.rating) winner = 'left';
-        if (rightPage.rating > leftPage.rating) winner = 'right';
+        const leftRating = leftPage.rating || 0;
+        const rightRating = rightPage.rating || 0;
+        
+        if (leftRating > rightRating) winner = 'left';
+        if (rightRating > leftRating) winner = 'right';
 
         let reward = 0;
         if (winner === betSide) {
@@ -59,14 +67,7 @@ export default async function handler(req, res) {
 
         await redis.set(userKey, JSON.stringify(user));
 
-        return res.status(200).json({
-            success: true,
-            leftPage,
-            rightPage,
-            winner,
-            reward,
-            newBalance: user.balance
-        });
+        return res.status(200).json({ success: true, leftPage, rightPage, winner, reward, newBalance: user.balance });
 
     } catch (e) {
         return res.status(500).json({ error: '服务器内部错误' });
