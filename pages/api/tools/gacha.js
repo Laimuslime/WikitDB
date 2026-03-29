@@ -1,135 +1,64 @@
 import { Redis } from '@upstash/redis';
+import { verifyToken } from '../../../utils/auth';
 
 const redis = Redis.fromEnv();
-
 const GRAPHQL_ENDPOINT = 'https://wikit.unitreaty.org/apiv1/graphql';
 
 export default async function handler(req, res) {
-    if (req.method !== 'POST') {
-        return res.status(405).json({ error: '仅支持 POST 请求' });
-    }
+    if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-    const { username } = req.body;
-
-    if (!username) {
-        return res.status(401).json({ error: '请先登录' });
-    }
+    // 【安全锁】：验证身份
+    const decoded = verifyToken(req);
+    if (!decoded || !decoded.username) return res.status(401).json({ error: '未授权的访问' });
+    const username = decoded.username; 
 
     try {
-        const user = await redis.get(`user:${username}`);
-        if (!user) {
-            return res.status(404).json({ error: '找不到该用户' });
+        const userKey = `user:${username}`;
+        let user = await redis.get(userKey);
+        if (!user) return res.status(404).json({ error: '用户不存在' });
+        if (typeof user === 'string') user = JSON.parse(user);
+
+        if ((user.balance || 0) < 200) {
+            return res.status(400).json({ error: '余额不足，每次抽取需要 ¥200' });
         }
 
-        const currentBalance = user.balance !== undefined ? Number(user.balance) : 10000;
-        const COST = 100; 
-
-        if (currentBalance < COST) {
-            return res.status(400).json({ error: `余额不足！抽一次需要 ${COST}，当前可用 ${currentBalance.toFixed(2)}` });
-        }
-
-        // 探底：获取全站总页面数量
-        const totalQuery = `
-            query {
-                articles(page: 1, pageSize: 1) {
-                    pageInfo {
-                        total
-                    }
-                }
-            }
-        `;
-
-        const totalRes = await fetch(GRAPHQL_ENDPOINT, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query: totalQuery })
+        const countRes = await fetch(GRAPHQL_ENDPOINT, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: `query { articles(page: 1, pageSize: 1) { pageInfo { total } } }` })
         });
-
-        if (!totalRes.ok) {
-            throw new Error('GraphQL 接口请求失败');
-        }
-
-        const totalData = await totalRes.json();
-        const totalPages = totalData?.data?.articles?.pageInfo?.total;
-
-        if (!totalPages || totalPages <= 0) {
-            throw new Error('未能从接口获取到页面总数');
-        }
-
-        // 抽卡：根据总数生成随机页码，捞取那条数据
-        const randomPageNum = Math.floor(Math.random() * totalPages) + 1;
-
-        const drawQuery = `
-            query {
-                articles(page: ${randomPageNum}, pageSize: 1) {
-                    nodes {
-                        wiki
-                        page
-                        title
-                        rating
-                    }
-                }
-            }
-        `;
-
-        const drawRes = await fetch(GRAPHQL_ENDPOINT, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query: drawQuery })
-        });
-
-        if (!drawRes.ok) {
-            throw new Error('GraphQL 接口请求失败');
-        }
-
-        const drawData = await drawRes.json();
-        const nodes = drawData?.data?.articles?.nodes;
-
-        if (!nodes || nodes.length === 0) {
-            throw new Error('抽卡失败，该随机页码没有返回数据');
-        }
-
-        const randomNode = nodes[0];
+        const countData = await countRes.json();
         
-        const site = randomNode.wiki || '未知站点';
-        const pageId = randomNode.page || 'unknown-page';
-        const title = randomNode.title || pageId;
-        const score = randomNode.rating || 0;
+        if (countData.errors || !countData.data?.articles?.pageInfo?.total) {
+            return res.status(500).json({ error: '数据库总容量读取失败' });
+        }
+        
+        const total = countData.data.articles.pageInfo.total;
+        const randomPage = Math.floor(Math.random() * total) + 1;
 
-        // 根据原站评分计算稀有度
-        let rarity = 'N';
-        if (score >= 20) rarity = 'SSR';
-        else if (score >= 10) rarity = 'SR';
-        else if (score >= 0) rarity = 'R';
-
-        const drawResult = {
-            site,
-            pageId,
-            title,
-            score,
-            rarity
-        };
-
-        // 扣款保存
-        user.balance = currentBalance - COST;
-        await redis.set(`user:${username}`, user);
-
-        const gachaRecord = {
-            id: Date.now().toString(),
-            username,
-            ...drawResult,
-            time: Date.now()
-        };
-        await redis.lpush(`user_gacha:${username}`, JSON.stringify(gachaRecord));
-
-        res.status(200).json({ 
-            message: '抽卡成功', 
-            newBalance: user.balance,
-            result: drawResult
+        const dataRes = await fetch(GRAPHQL_ENDPOINT, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: `query { articles(page: ${randomPage}, pageSize: 1) { nodes { wiki title rating author tags } } }` })
         });
+        const dataJson = await dataRes.json();
+        const article = dataJson.data?.articles?.nodes[0];
 
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: '抽卡机发生故障，请检查接口连通性' });
+        if (!article) return res.status(500).json({ error: '节点数据抓取失败' });
+
+        user.balance -= 200;
+        let reward = 0, rarity = 'N';
+        const r = article.rating || 0;
+
+        if (r >= 100) { rarity = 'SSR'; reward = 1000; } 
+        else if (r >= 50) { rarity = 'SR'; reward = 500; } 
+        else if (r >= 20) { rarity = 'R'; reward = 100; } 
+        else if (r < 0) { rarity = 'CURSED'; reward = 0; }
+        
+        user.balance += reward;
+        await redis.set(userKey, JSON.stringify(user));
+
+        return res.status(200).json({ success: true, article, rarity, reward, newBalance: user.balance });
+
+    } catch (e) {
+        return res.status(500).json({ error: '服务器内部错误' });
     }
 }
