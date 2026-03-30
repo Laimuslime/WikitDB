@@ -27,112 +27,93 @@ export default function ForumRecent() {
             if (res.ok) {
                 setPosts(data.posts || []);
             } else {
-                toast.error(data.error || '节点数据抓取失败');
+                toast.error(data.error || '数据拉取失败');
             }
         } catch (error) {
-            toast.error('网络请求超时，请检查您的网络连接');
+            toast.error('网络请求超时');
         } finally {
             setIsLoading(false);
         }
     };
 
     if (!activeSite) {
-        return <div className="p-8 text-white">请检查项目根目录的 wikitdb.config.js 配置文件</div>;
+        return <div className="p-8 text-white">请在 wikitdb.config.js 中配置 SUPPORT_WIKI</div>;
     }
 
     return (
         <div className="py-8 font-sans bg-[#0a0a0a] min-h-screen text-gray-200">
-            <Head><title>最新通讯监测 - {config.SITE_NAME}</title></Head>
+            <Head><title>论坛最新动态 - {config.SITE_NAME}</title></Head>
             
             <div className="max-w-6xl mx-auto px-4">
-                {/* 页面头部 */}
-                <div className="mb-6 border-b border-gray-800 pb-4 flex flex-col md:flex-row md:items-end justify-between gap-4">
-                    <div>
-                        <Link href="/tools" className="text-blue-500 hover:text-blue-400 text-sm mb-4 inline-block transition-colors">&larr; 返回工具箱</Link>
-                        <h1 className="text-3xl font-bold text-white flex items-center gap-3">
-                            <i className="fa-solid fa-satellite-dish text-blue-500"></i> 最新通讯监测
-                        </h1>
-                        <p className="text-gray-400 mt-2 text-sm">在这里集中查看各个相关站点的论坛最新回复记录。</p>
-                    </div>
-                    <button 
-                        onClick={() => fetchRecentPosts(activeSite.URL)} 
-                        disabled={isLoading}
-                        className="bg-[#121212] border border-gray-800 hover:bg-gray-800 text-gray-300 px-6 py-2.5 rounded-lg text-sm transition-colors shadow-inner"
-                    >
-                        {isLoading ? '刷新中...' : '手动刷新数据'}
-                    </button>
+                <div className="mb-8 border-b border-gray-800 pb-4">
+                    <Link href="/tools" className="text-blue-500 hover:text-blue-400 text-sm mb-4 inline-block transition-colors">
+                        返回工具箱
+                    </Link>
+                    <h1 className="text-3xl font-bold text-white">论坛最新动态</h1>
+                    <p className="text-gray-400 mt-2 text-sm">查看各个站点的论坛最新回复记录。</p>
                 </div>
 
-                {/* 顶部站点切换选项卡 */}
-                <div className="flex overflow-x-auto custom-scrollbar mb-6 gap-2">
+                <div className="flex space-x-2 mb-6 overflow-x-auto">
                     {availableSites.map(site => (
                         <button
                             key={site.URL}
                             onClick={() => setActiveSite(site)}
-                            className={`px-5 py-2.5 text-sm font-bold rounded-t-lg transition-colors border-b-2 whitespace-nowrap flex items-center gap-2 ${
+                            className={`px-5 py-2.5 rounded-t-lg text-sm font-medium transition-colors ${
                                 activeSite.URL === site.URL 
-                                ? 'text-blue-400 border-blue-500 bg-[#121212]' 
-                                : 'text-gray-500 border-transparent hover:text-gray-300 hover:bg-gray-900/50'
+                                ? 'bg-[#121212] text-blue-400 border-t border-l border-r border-gray-800' 
+                                : 'bg-transparent text-gray-500 hover:text-gray-300'
                             }`}
                         >
-                            {site.ImgURL && <img src={site.ImgURL} alt={site.NAME} className="w-4 h-4 object-contain" />}
                             {site.NAME}
                         </button>
                     ))}
                 </div>
 
-                {/* 纯净表格主区域 */}
-                <div className="bg-[#121212] border border-gray-800 rounded-xl p-5 shadow-lg">
+                <div className="bg-[#121212] border border-gray-800 rounded-xl p-6 shadow-lg">
+                    <div className="mb-6">
+                        <button 
+                            onClick={() => fetchRecentPosts(activeSite.URL)} 
+                            disabled={isLoading} 
+                            className="bg-gray-800 hover:bg-gray-700 text-white px-5 py-2 rounded text-sm transition-colors disabled:opacity-50"
+                        >
+                            {isLoading ? '正在刷新...' : '刷新数据'}
+                        </button>
+                    </div>
+
                     <div className="overflow-x-auto">
-                        <table className="w-full text-left text-sm whitespace-nowrap">
-                            <thead className="bg-[#0a0a0a] border-b border-gray-800 text-gray-500 text-xs">
-                                <tr>
-                                    <th className="px-4 py-3 font-bold">帖子标题</th>
-                                    <th className="px-4 py-3 font-bold">所属板块</th>
-                                    <th className="px-4 py-3 font-bold">发帖/回复人</th>
-                                    <th className="px-4 py-3 font-bold text-right">时间</th>
+                        <table className="w-full text-left text-sm">
+                            <thead>
+                                <tr className="border-b border-gray-800 text-gray-400">
+                                    <th className="pb-3 font-medium">帖子标题</th>
+                                    <th className="pb-3 font-medium">讨论区</th>
+                                    <th className="pb-3 font-medium">最新回复人</th>
+                                    <th className="pb-3 font-medium text-right">回复时间</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-gray-800/50">
+                            <tbody>
                                 {isLoading ? (
                                     <tr>
-                                        <td colSpan="4" className="px-4 py-16 text-center text-gray-500">
-                                            <i className="fa-solid fa-circle-notch fa-spin text-2xl mb-3 opacity-50 block"></i>
-                                            正在连接 {activeSite.NAME} 并拉取数据...
-                                        </td>
+                                        <td colSpan="4" className="py-12 text-center text-gray-500">正在加载数据...</td>
                                     </tr>
                                 ) : posts.length === 0 ? (
                                     <tr>
-                                        <td colSpan="4" className="px-4 py-16 text-center text-gray-500">
-                                            <i className="fa-solid fa-ghost text-3xl mb-3 opacity-30 block"></i>
-                                            暂无最新回复，或目标站点拦截了访问。
-                                        </td>
+                                        <td colSpan="4" className="py-12 text-center text-gray-500">暂无数据</td>
                                     </tr>
                                 ) : (
                                     posts.map((post, idx) => (
-                                        <tr key={`${post.id}-${idx}`} className="hover:bg-gray-800/40 transition-colors group">
-                                            <td className="px-4 py-4">
-                                                <div className="font-medium text-gray-200 group-hover:text-blue-400 transition-colors truncate max-w-md">
-                                                    {post.title}
-                                                </div>
-                                                <div className="text-xs text-gray-600 mt-1 flex items-center gap-3">
-                                                    <span className="bg-gray-900 px-1.5 py-0.5 rounded border border-gray-700">ID: {post.id}</span>
-                                                    <a href={`/tools/forum?id=${post.id}`} target="_blank" rel="noreferrer" className="text-blue-500 hover:text-blue-300 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                        阅读内容
+                                        <tr key={`${post.id}-${idx}`} className="border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors">
+                                            <td className="py-4 pr-4">
+                                                <div className="text-gray-200 font-medium mb-1">{post.title}</div>
+                                                <div className="text-xs text-gray-500">
+                                                    ID: {post.id}
+                                                    <a href={`/tools/forum?id=${post.id}`} target="_blank" rel="noreferrer" className="text-blue-500 ml-3 hover:underline">
+                                                        查看内容
                                                     </a>
                                                 </div>
                                             </td>
-                                            <td className="px-4 py-4 text-gray-400">
-                                                <span className="inline-block px-2.5 py-1 bg-gray-900 border border-gray-700 text-xs rounded truncate max-w-[150px]">
-                                                    {post.board}
-                                                </span>
-                                            </td>
-                                            <td className="px-4 py-4 text-blue-300 font-bold">
-                                                {post.author}
-                                            </td>
-                                            <td className="px-4 py-4 text-right text-gray-500">
-                                                {post.date}
-                                            </td>
+                                            <td className="py-4 pr-4 text-gray-400">{post.board}</td>
+                                            <td className="py-4 pr-4 text-blue-400">{post.author}</td>
+                                            <td className="py-4 text-right text-gray-500">{post.date}</td>
                                         </tr>
                                     ))
                                 )}
